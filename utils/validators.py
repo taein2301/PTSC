@@ -10,7 +10,7 @@ This module provides functions to validate uploaded files including:
 """
 
 import os
-from typing import Tuple, Optional
+from typing import Tuple
 import xml.etree.ElementTree as ET
 
 
@@ -213,7 +213,7 @@ def detect_encoding(file_bytes: bytes) -> str:
     return 'utf-8'
 
 
-def check_malicious_patterns(content: str) -> Tuple[bool, Optional[str]]:
+def check_malicious_patterns(content: str) -> Tuple[bool, str]:
     """
     Check for potentially malicious patterns in file content.
 
@@ -250,7 +250,7 @@ def check_malicious_patterns(content: str) -> Tuple[bool, Optional[str]]:
         warning = f"Warning: Found potentially dangerous patterns: {', '.join(found_patterns)}"
         return False, warning
 
-    return True, None
+    return True, ""
 
 
 def validate_file(filename: str, content: str, file_type: str) -> Tuple[bool, str]:

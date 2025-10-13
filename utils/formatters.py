@@ -11,7 +11,6 @@ This module provides functions for formatting and beautifying code:
 import re
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-from typing import List
 
 
 def format_c_code(code: str, indent_size: int = 4) -> str:
@@ -107,7 +106,7 @@ def format_xml_code(xml_string: str, indent_size: int = 2) -> str:
 
         return '\n'.join(lines)
 
-    except Exception as e:
+    except Exception:
         # If formatting fails, return original
         return xml_string
 
@@ -224,7 +223,7 @@ def add_function_separators(code: str, separator_char: str = '=', length: int = 
     function_pattern = r'^([\w\*\s]+\s+\w+\s*\([^)]*\)\s*\{)'
 
     lines = code.split('\n')
-    result = []
+    result: list[str] = []
     separator = '// ' + separator_char * (length - 3)
 
     for i, line in enumerate(lines):

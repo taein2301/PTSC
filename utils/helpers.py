@@ -13,7 +13,6 @@ import os
 import re
 from datetime import datetime
 from typing import Optional, Tuple
-from pathlib import Path
 
 
 def read_file(file_path: str, encoding: Optional[str] = None) -> Tuple[bool, str, str]:
@@ -159,12 +158,13 @@ def format_file_size(size_bytes: int) -> str:
         >>> format_file_size(1048576)
         '1.00 MB'
     """
+    size: float = float(size_bytes)
     for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.2f} {unit}"
-        size_bytes /= 1024.0
+        if size < 1024.0:
+            return f"{size:.2f} {unit}"
+        size /= 1024.0
 
-    return f"{size_bytes:.2f} TB"
+    return f"{size:.2f} TB"
 
 
 def format_error_message(error_type: str, details: str, line_number: Optional[int] = None) -> str:
@@ -469,7 +469,7 @@ def parse_key_value_pairs(text: str, delimiter: str = '=', separator: str = '&')
         >>> parse_key_value_pairs("name=John&age=30")
         {'name': 'John', 'age': '30'}
     """
-    result = {}
+    result: dict[str, str] = {}
 
     if not text:
         return result

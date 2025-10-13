@@ -326,7 +326,7 @@ class JMXParser:
         Returns:
             Dictionary of properties
         """
-        properties = {}
+        properties: Dict[str, Any] = {}
 
         # Extract string properties
         for prop in element.findall('.//stringProp'):
@@ -338,14 +338,16 @@ class JMXParser:
         for prop in element.findall('.//boolProp'):
             name = prop.get('name', '')
             if name:
-                properties[name] = prop.text and prop.text.lower() == 'true'
+                bool_value = prop.text and prop.text.lower() == 'true'
+                properties[name] = bool(bool_value)
 
         # Extract integer properties
         for prop in element.findall('.//intProp'):
             name = prop.get('name', '')
             if name:
                 try:
-                    properties[name] = int(prop.text or '0')
+                    int_value = int(prop.text or '0')
+                    properties[name] = int_value
                 except ValueError:
                     properties[name] = 0
 
@@ -354,7 +356,8 @@ class JMXParser:
             name = prop.get('name', '')
             if name:
                 try:
-                    properties[name] = int(prop.text or '0')
+                    long_value = int(prop.text or '0')
+                    properties[name] = long_value
                 except ValueError:
                     properties[name] = 0
 
