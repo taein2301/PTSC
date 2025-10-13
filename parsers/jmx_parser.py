@@ -1,530 +1,397 @@
 """
-JMX Parser Module
+JMeter JMX Parser
 
-Parses JMeter JMX files and extracts test plan components including:
-- Test plan configuration
-- Thread groups
-- HTTP samplers
-- Headers, cookies, assertions
-- Extractors (regex, JSON)
-- Timers and controllers
+This module provides functionality to parse JMeter JMX files and extract
+test plan elements, thread groups, samplers, and other components.
 """
 
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Any, Optional
-from utils.constants import JMETER_ELEMENTS, ERROR_CODES
+from typing import Dict, List, Optional, Tuple, Any
+import logging
+
+from utils.validators import validate_jmx_format
+from utils.helpers import read_file, format_error_message
+from utils.constants import JMETER_HASH_TREE
 
 
 class JMXParser:
-    """Parser for JMeter JMX files"""
+    """
+    Parser for JMeter JMX files.
 
-    def __init__(self):
-        """Initialize the JMX parser"""
-        self.root = None
-        self.test_plan_data = {}
+    This class handles loading and parsing JMeter JMX files, extracting
+    test plan structure, thread groups, samplers, and other elements.
 
-    def parse(self, jmx_content: str) -> Dict[str, Any]:
+    Attributes:
+        file_path: Path to the JMX file
+        root: XML root element
+        test_plan: Parsed test plan data
+        errors: List of parsing errors
+        warnings: List of parsing warnings
+    """
+
+    def __init__(self, file_path: Optional[str] = None):
         """
-        Parse JMX content and extract all components
+        Initialize JMXParser.
 
         Args:
-            jmx_content: JMX file content as string
+            file_path: Optional path to JMX file to load immediately
+        """
+        self.file_path = file_path
+        self.root: Optional[ET.Element] = None
+        self.test_plan: Dict[str, Any] = {}
+        self.errors: List[str] = []
+        self.warnings: List[str] = []
+        self.logger = logging.getLogger(__name__)
+
+        if file_path:
+            self.load_file(file_path)
+
+    def load_file(self, file_path: str) -> Tuple[bool, str]:
+        """
+        Load and parse a JMX file.
+
+        Args:
+            file_path: Path to the JMX file
 
         Returns:
-            Dictionary containing parsed test plan data
+            Tuple of (success, error_message)
+
+        Example:
+            >>> parser = JMXParser()
+            >>> success, error = parser.load_file("test.jmx")
+            >>> if success:
+            ...     print("File loaded successfully")
+        """
+        self.file_path = file_path
+        self.errors.clear()
+        self.warnings.clear()
+
+        try:
+            # Read file with encoding detection
+            success, content, error = read_file(file_path)
+
+            if not success:
+                error_msg = format_error_message("FileReadError", error)
+                self.errors.append(error_msg)
+                return False, error_msg
+
+            # Validate JMX format
+            is_valid, validation_error = validate_jmx_format(content)
+            if not is_valid:
+                error_msg = format_error_message("ValidationError", validation_error)
+                self.errors.append(error_msg)
+                return False, error_msg
+
+            # Parse XML
+            success, error = self._parse_xml(content)
+            if not success:
+                return False, error
+
+            self.logger.info(f"Successfully loaded JMX file: {file_path}")
+            return True, ""
+
+        except Exception as e:
+            error_msg = format_error_message("ParseError", str(e))
+            self.errors.append(error_msg)
+            self.logger.error(f"Failed to load JMX file: {error_msg}")
+            return False, error_msg
+
+    def _parse_xml(self, content: str) -> Tuple[bool, str]:
+        """
+        Parse XML content into ElementTree.
+
+        Args:
+            content: XML content as string
+
+        Returns:
+            Tuple of (success, error_message)
         """
         try:
-            self.root = ET.fromstring(jmx_content)
+            self.root = ET.fromstring(content)
+
+            # Verify root element
+            if self.root.tag != 'jmeterTestPlan':
+                error_msg = format_error_message(
+                    "InvalidFormat",
+                    f"Expected 'jmeterTestPlan' root element, got '{self.root.tag}'"
+                )
+                self.errors.append(error_msg)
+                return False, error_msg
+
+            return True, ""
+
         except ET.ParseError as e:
-            return {
-                'success': False,
-                'error': f"{ERROR_CODES['INVALID_XML']}: Failed to parse JMX - {str(e)}",
-                'data': None
+            error_msg = format_error_message("XMLParseError", str(e))
+            self.errors.append(error_msg)
+            return False, error_msg
+        except Exception as e:
+            error_msg = format_error_message("UnexpectedError", str(e))
+            self.errors.append(error_msg)
+            return False, error_msg
+
+    def parse(self) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Parse the loaded JMX file and extract all components.
+
+        Returns:
+            Tuple of (success, parsed_data)
+
+        The parsed_data dictionary contains:
+        - test_plan: Test plan metadata
+        - thread_groups: List of thread groups
+        - variables: Global variables
+        - elements: List of all test elements
+
+        Example:
+            >>> parser = JMXParser("test.jmx")
+            >>> success, data = parser.parse()
+            >>> if success:
+            ...     print(f"Found {len(data['thread_groups'])} thread groups")
+        """
+        if self.root is None:
+            error_msg = "No JMX file loaded. Call load_file() first."
+            self.errors.append(error_msg)
+            return False, {}
+
+        try:
+            self.test_plan = {
+                'test_plan': {},
+                'thread_groups': [],
+                'variables': {},
+                'elements': []
             }
 
-        # Extract test plan elements
-        test_plan = self._extract_test_plan()
-        thread_groups = self._extract_thread_groups()
-        user_variables = self._extract_user_variables()
+            # Parse test plan metadata
+            self._parse_test_plan_metadata()
 
-        self.test_plan_data = {
-            'success': True,
-            'test_plan': test_plan,
-            'thread_groups': thread_groups,
-            'user_variables': user_variables
+            # Parse main structure
+            self._parse_hash_tree(self.root)
+
+            self.logger.info("JMX parsing completed successfully")
+            return True, self.test_plan
+
+        except Exception as e:
+            error_msg = format_error_message("ParseError", str(e))
+            self.errors.append(error_msg)
+            self.logger.error(f"JMX parsing failed: {error_msg}")
+            return False, {}
+
+    def _parse_test_plan_metadata(self) -> None:
+        """
+        Parse test plan metadata from root element.
+        """
+        if self.root is None:
+            return
+
+        # Get JMeter version info
+        self.test_plan['test_plan'] = {
+            'version': self.root.get('version', '1.2'),
+            'properties': self.root.get('properties', '5.0'),
+            'jmeter': self.root.get('jmeter', '5.5')
         }
 
-        return self.test_plan_data
-
-    def _extract_test_plan(self) -> Dict[str, Any]:
+    def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
-        Extract test plan configuration
+        Parse hashTree elements recursively.
+
+        JMeter uses hashTree elements to represent hierarchical structure.
+        Each element is followed by a hashTree containing its children.
+
+        Args:
+            element: Current XML element
+            parent_type: Type of parent element for context
+        """
+        for child in element:
+            if child.tag == JMETER_HASH_TREE:
+                # Process children of hashTree
+                self._parse_hash_tree(child, parent_type)
+            else:
+                # Process actual test element
+                element_type = self._get_element_type(child)
+
+                if element_type:
+                    self._process_element(child, element_type)
+
+                    # Find and process its hashTree (children)
+                    next_elem = self._get_next_sibling(element, child)
+                    if next_elem is not None and next_elem.tag == JMETER_HASH_TREE:
+                        self._parse_hash_tree(next_elem, element_type)
+
+    def _get_element_type(self, element: ET.Element) -> Optional[str]:
+        """
+        Get the type of a JMeter element.
+
+        Args:
+            element: XML element
 
         Returns:
-            Dictionary with test plan info
+            Element type string or None
         """
-        test_plan_elem = self.root.find(f'.//{JMETER_ELEMENTS["TEST_PLAN"]}')
+        # Check testclass attribute
+        test_class = element.get('testclass', '')
+        if test_class:
+            return test_class
 
-        if test_plan_elem is None:
-            return {'name': 'Unknown Test Plan', 'properties': {}}
+        # Check guiclass attribute
+        gui_class = element.get('guiclass', '')
+        if gui_class:
+            # Extract class name from GUI class
+            # e.g., "ThreadGroupGui" -> "ThreadGroup"
+            return gui_class.replace('Gui', '')
 
-        name = test_plan_elem.get('testname', 'Unknown Test Plan')
-        enabled = test_plan_elem.get('enabled', 'true') == 'true'
+        return None
 
-        return {
-            'name': name,
-            'enabled': enabled,
-            'properties': self._extract_properties(test_plan_elem)
+    def _get_next_sibling(self, parent: ET.Element, current: ET.Element) -> Optional[ET.Element]:
+        """
+        Get the next sibling element.
+
+        Args:
+            parent: Parent element
+            current: Current element
+
+        Returns:
+            Next sibling element or None
+        """
+        children = list(parent)
+        try:
+            current_index = children.index(current)
+            if current_index + 1 < len(children):
+                return children[current_index + 1]
+        except ValueError:
+            pass
+
+        return None
+
+    def _process_element(self, element: ET.Element, element_type: str) -> None:
+        """
+        Process a test element based on its type.
+
+        Args:
+            element: XML element
+            element_type: Type of element
+        """
+        # Store element info
+        element_info = {
+            'type': element_type,
+            'name': self._get_element_name(element),
+            'enabled': self._get_element_enabled(element),
+            'properties': self._extract_properties(element)
         }
 
-    def _extract_thread_groups(self) -> List[Dict[str, Any]]:
+        self.test_plan['elements'].append(element_info)
+
+        self.logger.debug(f"Processed element: {element_type} - {element_info['name']}")
+
+    def _get_element_name(self, element: ET.Element) -> str:
         """
-        Extract all thread groups with their samplers and config
-
-        Returns:
-            List of thread group dictionaries
-        """
-        thread_groups = []
-        thread_group_elems = self.root.findall(f'.//{JMETER_ELEMENTS["THREAD_GROUP"]}')
-
-        for tg_elem in thread_group_elems:
-            thread_group = self._parse_thread_group(tg_elem)
-            thread_groups.append(thread_group)
-
-        return thread_groups
-
-    def _parse_thread_group(self, elem: ET.Element) -> Dict[str, Any]:
-        """
-        Parse a single thread group element
+        Get the name of an element.
 
         Args:
-            elem: ThreadGroup XML element
+            element: XML element
 
         Returns:
-            Dictionary with thread group data
+            Element name
         """
-        name = elem.get('testname', 'Thread Group')
-        enabled = elem.get('enabled', 'true') == 'true'
+        name_prop = element.find(".//stringProp[@name='TestElement.name']")
+        if name_prop is not None and name_prop.text:
+            return name_prop.text
 
-        # Extract thread group properties
-        num_threads = self._get_string_prop(elem, 'ThreadGroup.num_threads', '1')
-        ramp_time = self._get_string_prop(elem, 'ThreadGroup.ramp_time', '1')
-        loops = self._get_string_prop(elem, 'LoopController.loops', '1')
-        duration = self._get_string_prop(elem, 'ThreadGroup.duration', '')
-        delay = self._get_string_prop(elem, 'ThreadGroup.delay', '')
+        # Fallback to testname attribute
+        return element.get('testname', 'Unnamed')
 
-        # Find the hashTree following this thread group
-        parent = self._find_parent(self.root, elem)
-        hash_tree = None
-
-        if parent is not None:
-            for i, child in enumerate(parent):
-                if child == elem and i + 1 < len(parent):
-                    next_elem = parent[i + 1]
-                    if next_elem.tag == 'hashTree':
-                        hash_tree = next_elem
-                        break
-
-        # Extract samplers and config elements from hashTree
-        samplers = []
-        headers = []
-        cookies = []
-        extractors = []
-        assertions = []
-        timers = []
-        controllers = []
-
-        if hash_tree is not None:
-            samplers = self._extract_samplers(hash_tree)
-            headers = self._extract_headers(hash_tree)
-            cookies = self._extract_cookies(hash_tree)
-            extractors = self._extract_extractors(hash_tree)
-            assertions = self._extract_assertions(hash_tree)
-            timers = self._extract_timers(hash_tree)
-            controllers = self._extract_controllers(hash_tree)
-
-        return {
-            'name': name,
-            'enabled': enabled,
-            'num_threads': num_threads,
-            'ramp_time': ramp_time,
-            'loops': loops,
-            'duration': duration,
-            'delay': delay,
-            'samplers': samplers,
-            'headers': headers,
-            'cookies': cookies,
-            'extractors': extractors,
-            'assertions': assertions,
-            'timers': timers,
-            'controllers': controllers
-        }
-
-    def _extract_samplers(self, hash_tree: ET.Element) -> List[Dict[str, Any]]:
+    def _get_element_enabled(self, element: ET.Element) -> bool:
         """
-        Extract HTTP samplers from hashTree
+        Check if an element is enabled.
 
         Args:
-            hash_tree: hashTree XML element
+            element: XML element
 
         Returns:
-            List of sampler dictionaries
+            True if enabled, False otherwise
         """
-        samplers = []
-        sampler_elems = hash_tree.findall(f'.//{JMETER_ELEMENTS["HTTP_SAMPLER"]}')
+        enabled_prop = element.find(".//boolProp[@name='TestElement.enabled']")
+        if enabled_prop is not None and enabled_prop.text:
+            return enabled_prop.text.lower() == 'true'
 
-        for sampler_elem in sampler_elems:
-            sampler = self._parse_http_sampler(sampler_elem)
-            samplers.append(sampler)
+        # Default to enabled
+        return element.get('enabled', 'true').lower() == 'true'
 
-        return samplers
-
-    def _parse_http_sampler(self, elem: ET.Element) -> Dict[str, Any]:
+    def _extract_properties(self, element: ET.Element) -> Dict[str, Any]:
         """
-        Parse HTTP sampler element
+        Extract all properties from an element.
 
         Args:
-            elem: HTTPSamplerProxy XML element
-
-        Returns:
-            Dictionary with sampler data
-        """
-        name = elem.get('testname', 'HTTP Request')
-        enabled = elem.get('enabled', 'true') == 'true'
-
-        # Extract HTTP request details
-        method = self._get_string_prop(elem, 'HTTPSampler.method', 'GET')
-        domain = self._get_string_prop(elem, 'HTTPSampler.domain', '')
-        port = self._get_string_prop(elem, 'HTTPSampler.port', '')
-        protocol = self._get_string_prop(elem, 'HTTPSampler.protocol', 'https')
-        path = self._get_string_prop(elem, 'HTTPSampler.path', '/')
-        content_encoding = self._get_string_prop(elem, 'HTTPSampler.contentEncoding', '')
-
-        # Extract parameters
-        arguments = self._extract_arguments(elem)
-
-        # Extract body data
-        post_body = self._get_string_prop(elem, 'Argument.value', '')
-
-        return {
-            'name': name,
-            'enabled': enabled,
-            'method': method,
-            'domain': domain,
-            'port': port,
-            'protocol': protocol,
-            'path': path,
-            'content_encoding': content_encoding,
-            'arguments': arguments,
-            'post_body': post_body
-        }
-
-    def _extract_arguments(self, elem: ET.Element) -> List[Dict[str, str]]:
-        """
-        Extract arguments/parameters from element
-
-        Args:
-            elem: XML element containing arguments
-
-        Returns:
-            List of argument dictionaries
-        """
-        arguments = []
-        args_elem = elem.find('.//elementProp[@name="HTTPsampler.Arguments"]')
-
-        if args_elem is not None:
-            for arg in args_elem.findall('.//elementProp'):
-                name = self._get_string_prop(arg, 'Argument.name', '')
-                value = self._get_string_prop(arg, 'Argument.value', '')
-                metadata = self._get_string_prop(arg, 'Argument.metadata', '=')
-
-                if name:  # Only add if name exists
-                    arguments.append({
-                        'name': name,
-                        'value': value,
-                        'metadata': metadata
-                    })
-
-        return arguments
-
-    def _extract_headers(self, hash_tree: ET.Element) -> List[Dict[str, str]]:
-        """
-        Extract header managers
-
-        Args:
-            hash_tree: hashTree XML element
-
-        Returns:
-            List of header dictionaries
-        """
-        headers = []
-        header_elems = hash_tree.findall(f'.//{JMETER_ELEMENTS["HEADER_MANAGER"]}')
-
-        for header_elem in header_elems:
-            coll_prop = header_elem.find('.//collectionProp[@name="HeaderManager.headers"]')
-            if coll_prop is not None:
-                for elem_prop in coll_prop.findall('.//elementProp'):
-                    name = self._get_string_prop(elem_prop, 'Header.name', '')
-                    value = self._get_string_prop(elem_prop, 'Header.value', '')
-
-                    if name:
-                        headers.append({'name': name, 'value': value})
-
-        return headers
-
-    def _extract_cookies(self, hash_tree: ET.Element) -> List[Dict[str, str]]:
-        """
-        Extract cookie managers
-
-        Args:
-            hash_tree: hashTree XML element
-
-        Returns:
-            List of cookie dictionaries
-        """
-        cookies = []
-        cookie_elems = hash_tree.findall(f'.//{JMETER_ELEMENTS["COOKIE_MANAGER"]}')
-
-        for cookie_elem in cookie_elems:
-            coll_prop = cookie_elem.find('.//collectionProp[@name="CookieManager.cookies"]')
-            if coll_prop is not None:
-                for elem_prop in coll_prop.findall('.//elementProp'):
-                    name = self._get_string_prop(elem_prop, 'Cookie.name', '')
-                    value = self._get_string_prop(elem_prop, 'Cookie.value', '')
-                    domain = self._get_string_prop(elem_prop, 'Cookie.domain', '')
-
-                    if name:
-                        cookies.append({'name': name, 'value': value, 'domain': domain})
-
-        return cookies
-
-    def _extract_extractors(self, hash_tree: ET.Element) -> List[Dict[str, Any]]:
-        """
-        Extract correlation extractors (regex, JSON)
-
-        Args:
-            hash_tree: hashTree XML element
-
-        Returns:
-            List of extractor dictionaries
-        """
-        extractors = []
-
-        # Regex extractors
-        regex_elems = hash_tree.findall(f'.//{JMETER_ELEMENTS["REGEX_EXTRACTOR"]}')
-        for regex_elem in regex_elems:
-            extractor = {
-                'type': 'regex',
-                'name': regex_elem.get('testname', 'RegEx Extractor'),
-                'refname': self._get_string_prop(regex_elem, 'RegexExtractor.refname', ''),
-                'regex': self._get_string_prop(regex_elem, 'RegexExtractor.regex', ''),
-                'template': self._get_string_prop(regex_elem, 'RegexExtractor.template', '$1$'),
-                'match_no': self._get_string_prop(regex_elem, 'RegexExtractor.match_number', '1'),
-                'default': self._get_string_prop(regex_elem, 'RegexExtractor.default', '')
-            }
-            extractors.append(extractor)
-
-        # JSON extractors
-        json_elems = hash_tree.findall(f'.//{JMETER_ELEMENTS["JSON_EXTRACTOR"]}')
-        for json_elem in json_elems:
-            extractor = {
-                'type': 'json',
-                'name': json_elem.get('testname', 'JSON Extractor'),
-                'refname': self._get_string_prop(json_elem, 'JSONPostProcessor.referenceNames', ''),
-                'jsonpath': self._get_string_prop(json_elem, 'JSONPostProcessor.jsonPathExprs', ''),
-                'match_no': self._get_string_prop(json_elem, 'JSONPostProcessor.match_numbers', '1'),
-                'default': self._get_string_prop(json_elem, 'JSONPostProcessor.defaultValues', '')
-            }
-            extractors.append(extractor)
-
-        return extractors
-
-    def _extract_assertions(self, hash_tree: ET.Element) -> List[Dict[str, Any]]:
-        """
-        Extract response assertions
-
-        Args:
-            hash_tree: hashTree XML element
-
-        Returns:
-            List of assertion dictionaries
-        """
-        assertions = []
-        assertion_elems = hash_tree.findall(f'.//{JMETER_ELEMENTS["RESPONSE_ASSERTION"]}')
-
-        for assertion_elem in assertion_elems:
-            name = assertion_elem.get('testname', 'Response Assertion')
-            test_field = self._get_string_prop(assertion_elem, 'Assertion.test_field', 'Assertion.response_data')
-            test_type = self._get_string_prop(assertion_elem, 'Assertion.test_type', '2')
-
-            # Extract test strings
-            test_strings = []
-            coll_prop = assertion_elem.find('.//collectionProp[@name="Asserion.test_strings"]')
-            if coll_prop is not None:
-                for string_prop in coll_prop.findall('.//stringProp'):
-                    test_strings.append(string_prop.text or '')
-
-            assertions.append({
-                'name': name,
-                'test_field': test_field,
-                'test_type': test_type,
-                'test_strings': test_strings
-            })
-
-        return assertions
-
-    def _extract_timers(self, hash_tree: ET.Element) -> List[Dict[str, Any]]:
-        """
-        Extract constant timers
-
-        Args:
-            hash_tree: hashTree XML element
-
-        Returns:
-            List of timer dictionaries
-        """
-        timers = []
-        timer_elems = hash_tree.findall(f'.//{JMETER_ELEMENTS["CONSTANT_TIMER"]}')
-
-        for timer_elem in timer_elems:
-            name = timer_elem.get('testname', 'Constant Timer')
-            delay = self._get_string_prop(timer_elem, 'ConstantTimer.delay', '0')
-
-            timers.append({
-                'name': name,
-                'delay': delay
-            })
-
-        return timers
-
-    def _extract_controllers(self, hash_tree: ET.Element) -> List[Dict[str, Any]]:
-        """
-        Extract controllers (Loop, If, While, Transaction)
-
-        Args:
-            hash_tree: hashTree XML element
-
-        Returns:
-            List of controller dictionaries
-        """
-        controllers = []
-
-        # Transaction controllers
-        trans_elems = hash_tree.findall(f'.//{JMETER_ELEMENTS["TRANSACTION_CONTROLLER"]}')
-        for trans_elem in trans_elems:
-            name = trans_elem.get('testname', 'Transaction')
-            parent_flag = self._get_bool_prop(trans_elem, 'TransactionController.parent', True)
-
-            controllers.append({
-                'type': 'transaction',
-                'name': name,
-                'parent': parent_flag
-            })
-
-        # Loop controllers
-        loop_elems = hash_tree.findall(f'.//{JMETER_ELEMENTS["LOOP_CONTROLLER"]}')
-        for loop_elem in loop_elems:
-            name = loop_elem.get('testname', 'Loop Controller')
-            loops = self._get_string_prop(loop_elem, 'LoopController.loops', '1')
-
-            controllers.append({
-                'type': 'loop',
-                'name': name,
-                'loops': loops
-            })
-
-        return controllers
-
-    def _extract_user_variables(self) -> Dict[str, str]:
-        """
-        Extract user defined variables from test plan
-
-        Returns:
-            Dictionary of variable name-value pairs
-        """
-        variables = {}
-        args_elem = self.root.find('.//Arguments')
-
-        if args_elem is not None:
-            for arg in args_elem.findall('.//elementProp'):
-                name = self._get_string_prop(arg, 'Argument.name', '')
-                value = self._get_string_prop(arg, 'Argument.value', '')
-
-                if name:
-                    variables[name] = value
-
-        return variables
-
-    def _extract_properties(self, elem: ET.Element) -> Dict[str, str]:
-        """
-        Extract all properties from element
-
-        Args:
-            elem: XML element
+            element: XML element
 
         Returns:
             Dictionary of properties
         """
         properties = {}
 
-        for string_prop in elem.findall('.//stringProp'):
-            name = string_prop.get('name', '')
-            value = string_prop.text or ''
+        # Extract string properties
+        for prop in element.findall('.//stringProp'):
+            name = prop.get('name', '')
             if name:
-                properties[name] = value
+                properties[name] = prop.text or ''
 
-        for bool_prop in elem.findall('.//boolProp'):
-            name = bool_prop.get('name', '')
-            value = bool_prop.text or 'false'
+        # Extract boolean properties
+        for prop in element.findall('.//boolProp'):
+            name = prop.get('name', '')
             if name:
-                properties[name] = value
+                properties[name] = prop.text and prop.text.lower() == 'true'
+
+        # Extract integer properties
+        for prop in element.findall('.//intProp'):
+            name = prop.get('name', '')
+            if name:
+                try:
+                    properties[name] = int(prop.text or '0')
+                except ValueError:
+                    properties[name] = 0
+
+        # Extract long properties
+        for prop in element.findall('.//longProp'):
+            name = prop.get('name', '')
+            if name:
+                try:
+                    properties[name] = int(prop.text or '0')
+                except ValueError:
+                    properties[name] = 0
 
         return properties
 
-    def _get_string_prop(self, elem: ET.Element, prop_name: str, default: str = '') -> str:
+    def get_test_plan(self) -> Dict[str, Any]:
         """
-        Get stringProp value from element
-
-        Args:
-            elem: XML element
-            prop_name: Property name
-            default: Default value if not found
+        Get the parsed test plan data.
 
         Returns:
-            Property value
+            Dictionary containing parsed test plan
         """
-        prop_elem = elem.find(f'.//stringProp[@name="{prop_name}"]')
-        return prop_elem.text if prop_elem is not None and prop_elem.text else default
+        return self.test_plan
 
-    def _get_bool_prop(self, elem: ET.Element, prop_name: str, default: bool = False) -> bool:
+    def get_errors(self) -> List[str]:
         """
-        Get boolProp value from element
-
-        Args:
-            elem: XML element
-            prop_name: Property name
-            default: Default value if not found
+        Get list of parsing errors.
 
         Returns:
-            Property value as boolean
+            List of error messages
         """
-        prop_elem = elem.find(f'.//boolProp[@name="{prop_name}"]')
-        if prop_elem is not None and prop_elem.text:
-            return prop_elem.text.lower() == 'true'
-        return default
+        return self.errors
 
-    def _find_parent(self, tree: ET.Element, child: ET.Element) -> Optional[ET.Element]:
+    def get_warnings(self) -> List[str]:
         """
-        Find parent element of a child
-
-        Args:
-            tree: Root element to search from
-            child: Child element to find parent of
+        Get list of parsing warnings.
 
         Returns:
-            Parent element or None
+            List of warning messages
         """
-        for parent in tree.iter():
-            if child in parent:
-                return parent
-        return None
+        return self.warnings
+
+    def has_errors(self) -> bool:
+        """
+        Check if there were any parsing errors.
+
+        Returns:
+            True if errors occurred, False otherwise
+        """
+        return len(self.errors) > 0
