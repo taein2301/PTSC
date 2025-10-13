@@ -1,214 +1,300 @@
 """
-File validation utilities for PTSC
+File Validation Utilities
+
+This module provides functions to validate uploaded files including:
+- File extension validation
+- File size validation
+- MIME type validation
+- XML format validation
+- C file syntax validation
 """
 
 import os
 from typing import Tuple, Optional
-from pathlib import Path
 import xml.etree.ElementTree as ET
 
-from .constants import (
-    ALLOWED_EXTENSIONS,
-    MAX_FILE_SIZE,
-    ERROR_CODES,
-    SUPPORTED_ENCODINGS
-)
+
+# Maximum file size: 10MB
+MAX_FILE_SIZE_MB = 10
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+# Supported file extensions
+SUPPORTED_EXTENSIONS = {
+    'jmx': ['.jmx'],
+    'c': ['.c', '.h'],
+    'all': ['.jmx', '.c', '.h']
+}
 
 
-class FileValidator:
-    """Validates uploaded files for conversion"""
+def validate_file_extension(filename: str, expected_type: str = 'all') -> Tuple[bool, str]:
+    """
+    Validate if the file has the correct extension.
 
-    @staticmethod
-    def validate_file_extension(filename: str, file_type: str) -> Tuple[bool, Optional[str]]:
-        """
-        Validate if file has correct extension
+    Args:
+        filename: Name of the file to validate
+        expected_type: Expected file type ('jmx', 'c', or 'all')
 
-        Args:
-            filename: Name of the file
-            file_type: Type of file ('JMX' or 'LOADRUNNER')
+    Returns:
+        Tuple of (is_valid, error_message)
 
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        if not filename:
-            return False, "Filename is empty"
+    Example:
+        >>> validate_file_extension("test.jmx", "jmx")
+        (True, "")
+        >>> validate_file_extension("test.txt", "jmx")
+        (False, "Invalid file extension. Expected: .jmx")
+    """
+    if not filename:
+        return False, "Filename is empty"
 
-        file_ext = Path(filename).suffix.lower()
+    ext = os.path.splitext(filename)[1].lower()
 
-        if file_type.upper() not in ALLOWED_EXTENSIONS:
-            return False, f"Unknown file type: {file_type}"
+    if expected_type not in SUPPORTED_EXTENSIONS:
+        return False, f"Unknown file type: {expected_type}"
 
-        allowed_exts = ALLOWED_EXTENSIONS[file_type.upper()]
+    allowed_extensions = SUPPORTED_EXTENSIONS[expected_type]
 
-        if file_ext not in allowed_exts:
-            expected = ", ".join(allowed_exts)
-            return False, f"{ERROR_CODES['INVALID_FILE_TYPE']}: Expected {expected}, got {file_ext}"
+    if ext not in allowed_extensions:
+        expected_str = ", ".join(allowed_extensions)
+        return False, f"Invalid file extension. Expected: {expected_str}, Got: {ext}"
 
-        return True, None
+    return True, ""
 
-    @staticmethod
-    def validate_file_size(file_size: int) -> Tuple[bool, Optional[str]]:
-        """
-        Validate if file size is within limits
 
-        Args:
-            file_size: Size of file in bytes
+def validate_file_size(file_size: int, max_size: int = MAX_FILE_SIZE_BYTES) -> Tuple[bool, str]:
+    """
+    Validate if the file size is within acceptable limits.
 
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        if file_size <= 0:
-            return False, "File is empty"
+    Args:
+        file_size: Size of the file in bytes
+        max_size: Maximum allowed file size in bytes
 
-        if file_size > MAX_FILE_SIZE:
-            max_mb = MAX_FILE_SIZE / (1024 * 1024)
-            actual_mb = file_size / (1024 * 1024)
-            return False, f"{ERROR_CODES['FILE_TOO_LARGE']}: File size {actual_mb:.2f}MB exceeds maximum {max_mb}MB"
+    Returns:
+        Tuple of (is_valid, error_message)
 
-        return True, None
+    Example:
+        >>> validate_file_size(1024 * 1024)  # 1MB
+        (True, "")
+        >>> validate_file_size(20 * 1024 * 1024)  # 20MB
+        (False, "File size exceeds maximum limit...")
+    """
+    if file_size <= 0:
+        return False, "File is empty"
 
-    @staticmethod
-    def validate_xml_structure(content: bytes) -> Tuple[bool, Optional[str]]:
-        """
-        Validate if content is valid XML
+    if file_size > max_size:
+        max_mb = max_size / (1024 * 1024)
+        actual_mb = file_size / (1024 * 1024)
+        return False, f"File size ({actual_mb:.2f}MB) exceeds maximum limit of {max_mb:.0f}MB"
 
-        Args:
-            content: File content as bytes
+    return True, ""
 
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        # Try different encodings
-        for encoding in SUPPORTED_ENCODINGS:
-            try:
-                text = content.decode(encoding)
-                ET.fromstring(text)
-                return True, None
-            except UnicodeDecodeError:
-                continue
-            except ET.ParseError as e:
-                return False, f"{ERROR_CODES['INVALID_XML']}: XML parsing error - {str(e)}"
-            except Exception as e:
-                return False, f"{ERROR_CODES['INVALID_XML']}: Unexpected error - {str(e)}"
 
-        return False, f"{ERROR_CODES['INVALID_XML']}: Unable to decode file with supported encodings"
+def validate_xml_format(content: str) -> Tuple[bool, str]:
+    """
+    Validate if the content is valid XML format.
 
-    @staticmethod
-    def validate_jmx_file(filename: str, content: bytes, file_size: int) -> Tuple[bool, Optional[str]]:
-        """
-        Comprehensive validation for JMX files
+    Args:
+        content: XML content as string
 
-        Args:
-            filename: Name of the file
-            content: File content as bytes
-            file_size: Size of file in bytes
+    Returns:
+        Tuple of (is_valid, error_message)
 
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        # Check extension
-        is_valid, error = FileValidator.validate_file_extension(filename, 'JMX')
-        if not is_valid:
-            return False, error
+    Example:
+        >>> validate_xml_format("<root><child>test</child></root>")
+        (True, "")
+        >>> validate_xml_format("<root><child>test</root>")
+        (False, "XML parsing error: ...")
+    """
+    if not content or not content.strip():
+        return False, "XML content is empty"
 
-        # Check size
-        is_valid, error = FileValidator.validate_file_size(file_size)
-        if not is_valid:
-            return False, error
+    try:
+        ET.fromstring(content)
+        return True, ""
+    except ET.ParseError as e:
+        return False, f"XML parsing error: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error while parsing XML: {str(e)}"
 
-        # Check XML structure
-        is_valid, error = FileValidator.validate_xml_structure(content)
-        if not is_valid:
-            return False, error
 
-        # Check if it's a JMeter test plan
+def validate_jmx_format(content: str) -> Tuple[bool, str]:
+    """
+    Validate if the content is a valid JMeter JMX file.
+
+    Args:
+        content: JMX file content as string
+
+    Returns:
+        Tuple of (is_valid, error_message)
+
+    Example:
+        >>> jmx_content = '<?xml version="1.0"?><jmeterTestPlan>...</jmeterTestPlan>'
+        >>> validate_jmx_format(jmx_content)
+        (True, "")
+    """
+    # First validate XML format
+    is_valid, error_msg = validate_xml_format(content)
+    if not is_valid:
+        return False, error_msg
+
+    # Check for JMeter root element
+    try:
+        root = ET.fromstring(content)
+        if root.tag != 'jmeterTestPlan':
+            return False, "Not a valid JMeter JMX file: root element must be 'jmeterTestPlan'"
+
+        # Check for required attributes
+        if 'version' not in root.attrib and 'properties' not in root.attrib:
+            return False, "JMX file missing required attributes"
+
+        return True, ""
+    except Exception as e:
+        return False, f"Error validating JMX format: {str(e)}"
+
+
+def validate_c_file_syntax(content: str) -> Tuple[bool, str]:
+    """
+    Basic validation for LoadRunner C script syntax.
+
+    Args:
+        content: C file content as string
+
+    Returns:
+        Tuple of (is_valid, error_message)
+
+    Note:
+        This is a basic validation that checks for common LoadRunner patterns.
+        It does not perform full C syntax validation.
+    """
+    if not content or not content.strip():
+        return False, "C file content is empty"
+
+    # Check for basic C file indicators
+    has_include = '#include' in content
+    has_function = any(func in content for func in ['vuser_init', 'Action', 'vuser_end'])
+
+    if not has_include and not has_function:
+        return False, "File does not appear to be a valid C script (missing includes or functions)"
+
+    # Check for balanced braces (basic check)
+    open_braces = content.count('{')
+    close_braces = content.count('}')
+
+    if open_braces != close_braces:
+        return False, f"Unbalanced braces: {open_braces} opening, {close_braces} closing"
+
+    return True, ""
+
+
+def detect_encoding(file_bytes: bytes) -> str:
+    """
+    Detect the encoding of a file.
+
+    Args:
+        file_bytes: Raw bytes of the file
+
+    Returns:
+        Detected encoding name ('utf-8', 'euc-kr', 'latin-1', etc.)
+
+    Example:
+        >>> with open('file.txt', 'rb') as f:
+        ...     encoding = detect_encoding(f.read())
+    """
+    # Try common encodings in order
+    encodings = ['utf-8', 'utf-8-sig', 'euc-kr', 'cp949', 'latin-1', 'ascii']
+
+    for encoding in encodings:
         try:
-            for encoding in SUPPORTED_ENCODINGS:
-                try:
-                    text = content.decode(encoding)
-                    root = ET.fromstring(text)
+            file_bytes.decode(encoding)
+            return encoding
+        except (UnicodeDecodeError, LookupError):
+            continue
 
-                    # Check if root element is jmeterTestPlan
-                    if root.tag != 'jmeterTestPlan':
-                        return False, f"{ERROR_CODES['INVALID_XML']}: Root element must be 'jmeterTestPlan', found '{root.tag}'"
+    # Default to utf-8 if all fail
+    return 'utf-8'
 
-                    # Check for TestPlan element
-                    test_plan = root.find('.//TestPlan')
-                    if test_plan is None:
-                        return False, f"{ERROR_CODES['MISSING_REQUIRED_FIELD']}: No TestPlan element found"
 
-                    return True, None
+def check_malicious_patterns(content: str) -> Tuple[bool, Optional[str]]:
+    """
+    Check for potentially malicious patterns in file content.
 
-                except UnicodeDecodeError:
-                    continue
+    Args:
+        content: File content to check
 
-            return False, f"{ERROR_CODES['INVALID_XML']}: Unable to decode JMX file"
+    Returns:
+        Tuple of (is_safe, warning_message)
 
-        except Exception as e:
-            return False, f"{ERROR_CODES['PARSING_ERROR']}: Error validating JMX structure - {str(e)}"
+    Note:
+        This is a basic security check and should not be relied upon
+        as the sole security measure.
+    """
+    # Patterns that might indicate malicious content
+    dangerous_patterns = [
+        'eval(',
+        'exec(',
+        'system(',
+        '__import__',
+        'subprocess',
+        'os.system',
+        'shell=True',
+    ]
 
-    @staticmethod
-    def validate_c_file(filename: str, content: bytes, file_size: int) -> Tuple[bool, Optional[str]]:
-        """
-        Comprehensive validation for LoadRunner C files
+    # Check for suspicious patterns
+    found_patterns = []
+    content_lower = content.lower()
 
-        Args:
-            filename: Name of the file
-            content: File content as bytes
-            file_size: Size of file in bytes
+    for pattern in dangerous_patterns:
+        if pattern.lower() in content_lower:
+            found_patterns.append(pattern)
 
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        # Check extension
-        is_valid, error = FileValidator.validate_file_extension(filename, 'LOADRUNNER')
-        if not is_valid:
-            return False, error
+    if found_patterns:
+        warning = f"Warning: Found potentially dangerous patterns: {', '.join(found_patterns)}"
+        return False, warning
 
-        # Check size
-        is_valid, error = FileValidator.validate_file_size(file_size)
-        if not is_valid:
-            return False, error
+    return True, None
 
-        # Try to decode content
-        text = None
-        for encoding in SUPPORTED_ENCODINGS:
-            try:
-                text = content.decode(encoding)
-                break
-            except UnicodeDecodeError:
-                continue
 
-        if text is None:
-            return False, f"{ERROR_CODES['INVALID_C_SYNTAX']}: Unable to decode C file with supported encodings"
+def validate_file(filename: str, content: str, file_type: str) -> Tuple[bool, str]:
+    """
+    Comprehensive file validation combining all checks.
 
-        # Check for basic LoadRunner structure
-        has_includes = '#include' in text
-        has_vuser_init = 'vuser_init' in text or 'Action' in text
-        has_web_functions = any(func in text for func in ['web_url', 'web_submit_data', 'web_custom_request'])
+    Args:
+        filename: Name of the file
+        content: File content as string
+        file_type: Expected file type ('jmx' or 'c')
 
-        if not (has_includes or has_vuser_init or has_web_functions):
-            return False, f"{ERROR_CODES['INVALID_C_SYNTAX']}: File does not appear to be a valid LoadRunner script"
+    Returns:
+        Tuple of (is_valid, error_message)
 
-        return True, None
+    Example:
+        >>> is_valid, error = validate_file("test.jmx", jmx_content, "jmx")
+        >>> if not is_valid:
+        ...     print(f"Validation failed: {error}")
+    """
+    # Validate extension
+    is_valid, error = validate_file_extension(filename, file_type)
+    if not is_valid:
+        return False, error
 
-    @staticmethod
-    def detect_encoding(content: bytes) -> str:
-        """
-        Detect the encoding of file content
+    # Validate content size
+    content_size = len(content.encode('utf-8'))
+    is_valid, error = validate_file_size(content_size)
+    if not is_valid:
+        return False, error
 
-        Args:
-            content: File content as bytes
+    # Check for malicious patterns
+    is_safe, warning = check_malicious_patterns(content)
+    if not is_safe:
+        return False, warning
 
-        Returns:
-            Detected encoding string
-        """
-        for encoding in SUPPORTED_ENCODINGS:
-            try:
-                content.decode(encoding)
-                return encoding
-            except UnicodeDecodeError:
-                continue
+    # Validate format based on file type
+    if file_type == 'jmx':
+        is_valid, error = validate_jmx_format(content)
+    elif file_type == 'c':
+        is_valid, error = validate_c_file_syntax(content)
+    else:
+        return False, f"Unsupported file type: {file_type}"
 
-        # Default to utf-8 if detection fails
-        return 'utf-8'
+    if not is_valid:
+        return False, error
+
+    return True, ""

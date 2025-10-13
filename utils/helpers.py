@@ -1,257 +1,530 @@
 """
-Helper utilities for PTSC
+Common Helper Functions
+
+This module provides utility functions for:
+- File I/O operations
+- Encoding detection and handling
+- String manipulation
+- Timestamp generation
+- Error message formatting
 """
 
+import os
 import re
 from datetime import datetime
+from typing import Optional, Tuple
 from pathlib import Path
-from typing import Optional, Dict, Any
-
-from .constants import ERROR_CODES
 
 
-class FileHelper:
-    """Helper functions for file operations"""
+def read_file(file_path: str, encoding: Optional[str] = None) -> Tuple[bool, str, str]:
+    """
+    Read a file with automatic encoding detection.
 
-    @staticmethod
-    def generate_output_filename(input_filename: str, output_ext: str) -> str:
-        """
-        Generate output filename based on input filename
+    Args:
+        file_path: Path to the file
+        encoding: Optional encoding (if None, will auto-detect)
 
-        Args:
-            input_filename: Original filename
-            output_ext: Extension for output file (.c or .jmx)
+    Returns:
+        Tuple of (success, content, error_message)
 
-        Returns:
-            Generated output filename
-        """
-        input_path = Path(input_filename)
-        base_name = input_path.stem
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    Example:
+        >>> success, content, error = read_file("test.txt")
+        >>> if success:
+        ...     print(content)
+    """
+    if not os.path.exists(file_path):
+        return False, "", f"File not found: {file_path}"
 
-        return f"{base_name}_converted_{timestamp}{output_ext}"
+    try:
+        if encoding:
+            # Use specified encoding
+            with open(file_path, 'r', encoding=encoding) as f:
+                content = f.read()
+            return True, content, ""
+        else:
+            # Auto-detect encoding
+            with open(file_path, 'rb') as f:
+                raw_data = f.read()
 
-    @staticmethod
-    def get_file_info(filename: str, file_size: int) -> Dict[str, Any]:
-        """
-        Get file information dictionary
+            # Try common encodings
+            for enc in ['utf-8', 'utf-8-sig', 'euc-kr', 'cp949', 'latin-1']:
+                try:
+                    content = raw_data.decode(enc)
+                    return True, content, ""
+                except UnicodeDecodeError:
+                    continue
 
-        Args:
-            filename: Name of the file
-            file_size: Size of file in bytes
+            # If all fail, use utf-8 with error handling
+            content = raw_data.decode('utf-8', errors='replace')
+            return True, content, "Warning: Some characters may not have decoded correctly"
 
-        Returns:
-            Dictionary with file information
-        """
-        path = Path(filename)
-
-        return {
-            'name': filename,
-            'stem': path.stem,
-            'extension': path.suffix,
-            'size_bytes': file_size,
-            'size_kb': file_size / 1024,
-            'size_mb': file_size / (1024 * 1024)
-        }
-
-
-class StringHelper:
-    """Helper functions for string operations"""
-
-    @staticmethod
-    def sanitize_variable_name(name: str) -> str:
-        """
-        Sanitize variable name to be valid in both JMeter and LoadRunner
-
-        Args:
-            name: Variable name to sanitize
-
-        Returns:
-            Sanitized variable name
-        """
-        # Remove invalid characters
-        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
-
-        # Ensure it starts with letter or underscore
-        if sanitized and sanitized[0].isdigit():
-            sanitized = f"var_{sanitized}"
-
-        return sanitized or "unnamed_var"
-
-    @staticmethod
-    def extract_jmeter_variable(text: str) -> list:
-        """
-        Extract JMeter variables from text (${varname})
-
-        Args:
-            text: Text containing variables
-
-        Returns:
-            List of variable names
-        """
-        pattern = r'\$\{([^}]+)\}'
-        matches = re.findall(pattern, text)
-        return matches
-
-    @staticmethod
-    def convert_jmeter_to_lr_variable(text: str) -> str:
-        """
-        Convert JMeter ${var} to LoadRunner lr_eval_string("{var}")
-
-        Args:
-            text: Text containing JMeter variables
-
-        Returns:
-            Text with LoadRunner variables
-        """
-        def replace_var(match):
-            var_name = match.group(1)
-            return f'lr_eval_string("{{{var_name}}}")'
-
-        return re.sub(r'\$\{([^}]+)\}', replace_var, text)
-
-    @staticmethod
-    def convert_lr_to_jmeter_variable(text: str) -> str:
-        """
-        Convert LoadRunner {var} to JMeter ${var}
-
-        Args:
-            text: Text containing LoadRunner variables
-
-        Returns:
-            Text with JMeter variables
-        """
-        return re.sub(r'\{([^}]+)\}', r'${\1}', text)
+    except Exception as e:
+        return False, "", f"Error reading file: {str(e)}"
 
 
-class LogHelper:
-    """Helper functions for logging and messages"""
+def write_file(file_path: str, content: str, encoding: str = 'utf-8') -> Tuple[bool, str]:
+    """
+    Write content to a file.
 
-    @staticmethod
-    def format_error_message(error_code: str, message: str) -> str:
-        """
-        Format error message with code
+    Args:
+        file_path: Path to the file
+        content: Content to write
+        encoding: Encoding to use (default: utf-8)
 
-        Args:
-            error_code: Error code from ERROR_CODES
-            message: Error message
+    Returns:
+        Tuple of (success, error_message)
 
-        Returns:
-            Formatted error message
-        """
-        return f"[{error_code}] {message}"
+    Example:
+        >>> success, error = write_file("output.txt", "Hello World")
+    """
+    try:
+        # Create directory if it doesn't exist
+        directory = os.path.dirname(file_path)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory)
 
-    @staticmethod
-    def create_conversion_log(
-        status: str,
-        items_converted: int = 0,
-        items_skipped: int = 0,
-        warnings: Optional[list] = None,
-        errors: Optional[list] = None
-    ) -> Dict[str, Any]:
-        """
-        Create conversion log dictionary
+        with open(file_path, 'w', encoding=encoding) as f:
+            f.write(content)
 
-        Args:
-            status: Conversion status (success/partial/failed)
-            items_converted: Number of items successfully converted
-            items_skipped: Number of items skipped
-            warnings: List of warning messages
-            errors: List of error messages
+        return True, ""
 
-        Returns:
-            Log dictionary
-        """
-        return {
-            'status': status,
-            'timestamp': datetime.now().isoformat(),
-            'items_converted': items_converted,
-            'items_skipped': items_skipped,
-            'warnings': warnings or [],
-            'errors': errors or [],
-            'accuracy': items_converted / (items_converted + items_skipped) if (items_converted + items_skipped) > 0 else 0
-        }
-
-    @staticmethod
-    def format_log_for_display(log: Dict[str, Any]) -> str:
-        """
-        Format log dictionary for display
-
-        Args:
-            log: Log dictionary from create_conversion_log
-
-        Returns:
-            Formatted log string
-        """
-        lines = []
-        lines.append(f"Status: {log['status'].upper()}")
-        lines.append(f"Timestamp: {log['timestamp']}")
-        lines.append(f"Items Converted: {log['items_converted']}")
-        lines.append(f"Items Skipped: {log['items_skipped']}")
-        lines.append(f"Accuracy: {log['accuracy']:.1%}")
-
-        if log['warnings']:
-            lines.append("\nWarnings:")
-            for warning in log['warnings']:
-                lines.append(f"  ⚠️ {warning}")
-
-        if log['errors']:
-            lines.append("\nErrors:")
-            for error in log['errors']:
-                lines.append(f"  ❌ {error}")
-
-        return '\n'.join(lines)
+    except Exception as e:
+        return False, f"Error writing file: {str(e)}"
 
 
-class ValidationHelper:
-    """Helper functions for validation"""
+def generate_output_filename(input_filename: str, target_type: str) -> str:
+    """
+    Generate output filename based on input filename and target type.
 
-    @staticmethod
-    def is_valid_url(url: str) -> bool:
-        """
-        Check if string is a valid URL
+    Args:
+        input_filename: Original filename
+        target_type: Target file type ('lr' for LoadRunner, 'jmx' for JMeter)
 
-        Args:
-            url: URL string to validate
+    Returns:
+        Generated output filename
 
-        Returns:
-            True if valid URL
-        """
-        url_pattern = re.compile(
-            r'^https?://'  # http:// or https://
-            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain
-            r'localhost|'  # localhost
-            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # or IP
-            r'(?::\d+)?'  # optional port
-            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+    Example:
+        >>> generate_output_filename("test.jmx", "lr")
+        'test_converted.c'
+        >>> generate_output_filename("script.c", "jmx")
+        'script_converted.jmx'
+    """
+    # Get base name without extension
+    base_name = os.path.splitext(input_filename)[0]
 
-        return bool(url_pattern.match(url))
+    # Determine extension
+    if target_type == 'lr':
+        extension = '.c'
+    elif target_type == 'jmx':
+        extension = '.jmx'
+    else:
+        extension = '.txt'
 
-    @staticmethod
-    def is_valid_http_method(method: str) -> bool:
-        """
-        Check if string is a valid HTTP method
+    # Generate filename
+    output_name = f"{base_name}_converted{extension}"
 
-        Args:
-            method: HTTP method string
+    return output_name
 
-        Returns:
-            True if valid method
-        """
-        valid_methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
-        return method.upper() in valid_methods
 
-    @staticmethod
-    def is_valid_content_type(content_type: str) -> bool:
-        """
-        Check if string is a valid content type
+def generate_timestamp(format_string: str = '%Y%m%d_%H%M%S') -> str:
+    """
+    Generate a timestamp string.
 
-        Args:
-            content_type: Content-Type string
+    Args:
+        format_string: Datetime format string
 
-        Returns:
-            True if valid content type
-        """
-        # Basic content type pattern
-        pattern = r'^[a-z]+/[a-z0-9\-\+\.]+(?:;\s*charset=[a-z0-9\-]+)?$'
-        return bool(re.match(pattern, content_type.lower()))
+    Returns:
+        Formatted timestamp string
+
+    Example:
+        >>> timestamp = generate_timestamp()
+        >>> print(timestamp)  # e.g., "20240113_153045"
+    """
+    return datetime.now().strftime(format_string)
+
+
+def format_file_size(size_bytes: int) -> str:
+    """
+    Format file size in human-readable format.
+
+    Args:
+        size_bytes: Size in bytes
+
+    Returns:
+        Formatted size string
+
+    Example:
+        >>> format_file_size(1024)
+        '1.00 KB'
+        >>> format_file_size(1048576)
+        '1.00 MB'
+    """
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.2f} {unit}"
+        size_bytes /= 1024.0
+
+    return f"{size_bytes:.2f} TB"
+
+
+def format_error_message(error_type: str, details: str, line_number: Optional[int] = None) -> str:
+    """
+    Format an error message in a consistent way.
+
+    Args:
+        error_type: Type of error (e.g., "ParseError", "ValidationError")
+        details: Error details
+        line_number: Optional line number where error occurred
+
+    Returns:
+        Formatted error message
+
+    Example:
+        >>> msg = format_error_message("ValidationError", "Invalid XML", 42)
+        >>> print(msg)
+        '[ValidationError] Line 42: Invalid XML'
+    """
+    if line_number:
+        return f"[{error_type}] Line {line_number}: {details}"
+    else:
+        return f"[{error_type}] {details}"
+
+
+def format_warning_message(warning_type: str, details: str) -> str:
+    """
+    Format a warning message in a consistent way.
+
+    Args:
+        warning_type: Type of warning
+        details: Warning details
+
+    Returns:
+        Formatted warning message
+
+    Example:
+        >>> msg = format_warning_message("ConversionWarning", "Unsupported element ignored")
+        >>> print(msg)
+    """
+    return f"[Warning:{warning_type}] {details}"
+
+
+def format_success_message(operation: str, details: str = "") -> str:
+    """
+    Format a success message in a consistent way.
+
+    Args:
+        operation: Operation that succeeded
+        details: Optional details
+
+    Returns:
+        Formatted success message
+
+    Example:
+        >>> msg = format_success_message("Conversion", "10 samplers converted")
+        >>> print(msg)
+    """
+    if details:
+        return f"[Success] {operation}: {details}"
+    else:
+        return f"[Success] {operation}"
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize a filename by removing or replacing invalid characters.
+
+    Args:
+        filename: Original filename
+
+    Returns:
+        Sanitized filename
+
+    Example:
+        >>> sanitize_filename("test<file>.txt")
+        'test_file_.txt'
+    """
+    # Replace invalid characters with underscore
+    invalid_chars = r'[<>:"/\\|?*]'
+    sanitized = re.sub(invalid_chars, '_', filename)
+
+    # Remove control characters
+    sanitized = ''.join(char for char in sanitized if ord(char) >= 32)
+
+    # Limit length
+    max_length = 255
+    if len(sanitized) > max_length:
+        name, ext = os.path.splitext(sanitized)
+        name = name[:max_length - len(ext)]
+        sanitized = name + ext
+
+    return sanitized
+
+
+def extract_variable_name(variable_ref: str, style: str = 'jmeter') -> Optional[str]:
+    """
+    Extract variable name from a variable reference.
+
+    Args:
+        variable_ref: Variable reference string
+        style: Variable style ('jmeter' for ${var}, 'lr' for {var})
+
+    Returns:
+        Variable name or None if not a valid reference
+
+    Example:
+        >>> extract_variable_name("${username}", "jmeter")
+        'username'
+        >>> extract_variable_name("{token}", "lr")
+        'token'
+    """
+    if style == 'jmeter':
+        # JMeter style: ${varname}
+        match = re.match(r'\$\{([^}]+)\}', variable_ref)
+    elif style == 'lr':
+        # LoadRunner style: {varname}
+        match = re.match(r'\{([^}]+)\}', variable_ref)
+    else:
+        return None
+
+    if match:
+        return match.group(1)
+    return None
+
+
+def convert_variable_reference(var_ref: str, source: str, target: str) -> str:
+    """
+    Convert variable reference from one format to another.
+
+    Args:
+        var_ref: Variable reference string
+        source: Source format ('jmeter' or 'lr')
+        target: Target format ('jmeter' or 'lr')
+
+    Returns:
+        Converted variable reference
+
+    Example:
+        >>> convert_variable_reference("${username}", "jmeter", "lr")
+        'lr_eval_string("{username}")'
+        >>> convert_variable_reference("{token}", "lr", "jmeter")
+        '${token}'
+    """
+    var_name = extract_variable_name(var_ref, source)
+
+    if not var_name:
+        return var_ref
+
+    if target == 'lr':
+        # Convert to LoadRunner format
+        return f'lr_eval_string("{{{var_name}}}")'
+    elif target == 'jmeter':
+        # Convert to JMeter format
+        return f'${{{var_name}}}'
+    else:
+        return var_ref
+
+
+def escape_c_string(text: str) -> str:
+    """
+    Escape a string for use in C code.
+
+    Args:
+        text: Text to escape
+
+    Returns:
+        Escaped text
+
+    Example:
+        >>> escape_c_string('Hello "World"')
+        'Hello \\\\"World\\\\"'
+    """
+    # Escape backslashes first
+    text = text.replace('\\', '\\\\')
+
+    # Escape quotes
+    text = text.replace('"', '\\"')
+
+    # Escape newlines
+    text = text.replace('\n', '\\n')
+
+    # Escape tabs
+    text = text.replace('\t', '\\t')
+
+    # Escape carriage returns
+    text = text.replace('\r', '\\r')
+
+    return text
+
+
+def unescape_c_string(text: str) -> str:
+    """
+    Unescape a C string.
+
+    Args:
+        text: Escaped text
+
+    Returns:
+        Unescaped text
+
+    Example:
+        >>> unescape_c_string('Hello \\\\"World\\\\"')
+        'Hello "World"'
+    """
+    # Unescape in reverse order
+    text = text.replace('\\r', '\r')
+    text = text.replace('\\t', '\t')
+    text = text.replace('\\n', '\n')
+    text = text.replace('\\"', '"')
+    text = text.replace('\\\\', '\\')
+
+    return text
+
+
+def split_url(url: str) -> Tuple[str, str, str, str]:
+    """
+    Split a URL into components.
+
+    Args:
+        url: Full URL
+
+    Returns:
+        Tuple of (protocol, domain, port, path)
+
+    Example:
+        >>> split_url("https://example.com:8080/api/users")
+        ('https', 'example.com', '8080', '/api/users')
+    """
+    # Default values
+    protocol = 'http'
+    domain = ''
+    port = ''
+    path = '/'
+
+    # Extract protocol
+    if '://' in url:
+        protocol, rest = url.split('://', 1)
+    else:
+        rest = url
+
+    # Extract path
+    if '/' in rest:
+        host_part, path = rest.split('/', 1)
+        path = '/' + path
+    else:
+        host_part = rest
+        path = '/'
+
+    # Extract domain and port
+    if ':' in host_part:
+        domain, port = host_part.rsplit(':', 1)
+    else:
+        domain = host_part
+
+    return protocol, domain, port, path
+
+
+def join_url(protocol: str, domain: str, port: str = '', path: str = '/') -> str:
+    """
+    Join URL components into a full URL.
+
+    Args:
+        protocol: Protocol (http, https)
+        domain: Domain name
+        port: Port number (optional)
+        path: Path (default: /)
+
+    Returns:
+        Full URL
+
+    Example:
+        >>> join_url("https", "example.com", "8080", "/api/users")
+        'https://example.com:8080/api/users'
+    """
+    url = f"{protocol}://{domain}"
+
+    if port:
+        url += f":{port}"
+
+    if not path.startswith('/'):
+        path = '/' + path
+
+    url += path
+
+    return url
+
+
+def parse_key_value_pairs(text: str, delimiter: str = '=', separator: str = '&') -> dict:
+    """
+    Parse key-value pairs from a string.
+
+    Args:
+        text: Text containing key-value pairs
+        delimiter: Delimiter between key and value
+        separator: Separator between pairs
+
+    Returns:
+        Dictionary of key-value pairs
+
+    Example:
+        >>> parse_key_value_pairs("name=John&age=30")
+        {'name': 'John', 'age': '30'}
+    """
+    result = {}
+
+    if not text:
+        return result
+
+    pairs = text.split(separator)
+
+    for pair in pairs:
+        if delimiter in pair:
+            key, value = pair.split(delimiter, 1)
+            result[key.strip()] = value.strip()
+
+    return result
+
+
+def get_file_extension(filename: str) -> str:
+    """
+    Get the file extension from a filename.
+
+    Args:
+        filename: Filename or path
+
+    Returns:
+        File extension (lowercase, with dot)
+
+    Example:
+        >>> get_file_extension("test.JMX")
+        '.jmx'
+    """
+    return os.path.splitext(filename)[1].lower()
+
+
+def ensure_directory_exists(file_path: str) -> bool:
+    """
+    Ensure that the directory for a file path exists.
+
+    Args:
+        file_path: Full file path
+
+    Returns:
+        True if directory exists or was created successfully
+
+    Example:
+        >>> ensure_directory_exists("output/results/test.txt")
+        True
+    """
+    directory = os.path.dirname(file_path)
+
+    if not directory:
+        return True
+
+    if os.path.exists(directory):
+        return True
+
+    try:
+        os.makedirs(directory)
+        return True
+    except Exception:
+        return False
