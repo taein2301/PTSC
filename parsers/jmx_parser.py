@@ -11,7 +11,11 @@ import logging
 
 from utils.validators import validate_jmx_format
 from utils.helpers import read_file, format_error_message
-from utils.constants import JMETER_HASH_TREE
+from utils.constants import (
+    JMETER_HASH_TREE,
+    JMETER_TEST_PLAN,
+    JMETER_USER_DEFINED_VARIABLES
+)
 
 
 class JMXParser:
@@ -179,6 +183,11 @@ class JMXParser:
     def _parse_test_plan_metadata(self) -> None:
         """
         Parse test plan metadata from root element.
+
+        Extracts:
+        - JMeter version information
+        - TestPlan element properties (name, comments, etc.)
+        - User defined variables
         """
         if self.root is None:
             return
@@ -187,8 +196,89 @@ class JMXParser:
         self.test_plan['test_plan'] = {
             'version': self.root.get('version', '1.2'),
             'properties': self.root.get('properties', '5.0'),
-            'jmeter': self.root.get('jmeter', '5.5')
+            'jmeter': self.root.get('jmeter', '5.5'),
+            'name': '',
+            'comments': '',
+            'enabled': True,
+            'functional_mode': False,
+            'serialize_threadgroups': False
         }
+
+        # Find TestPlan element
+        test_plan_elem = self.root.find(f".//{JMETER_TEST_PLAN}")
+        if test_plan_elem is not None:
+            self._extract_test_plan_properties(test_plan_elem)
+
+            # Find and parse user defined variables
+            self._extract_user_variables(test_plan_elem)
+
+    def _extract_test_plan_properties(self, test_plan_elem: ET.Element) -> None:
+        """
+        Extract properties from TestPlan element.
+
+        Args:
+            test_plan_elem: TestPlan XML element
+        """
+        # Extract test plan name
+        name_prop = test_plan_elem.find(".//stringProp[@name='TestPlan.name']")
+        if name_prop is None:
+            name_prop = test_plan_elem.find(".//stringProp[@name='TestElement.name']")
+        if name_prop is not None and name_prop.text:
+            self.test_plan['test_plan']['name'] = name_prop.text
+        else:
+            # Fallback to testname attribute
+            self.test_plan['test_plan']['name'] = test_plan_elem.get('testname', 'Test Plan')
+
+        # Extract comments
+        comments_prop = test_plan_elem.find(".//stringProp[@name='TestPlan.comments']")
+        if comments_prop is not None and comments_prop.text:
+            self.test_plan['test_plan']['comments'] = comments_prop.text
+
+        # Extract enabled status
+        enabled_prop = test_plan_elem.find(".//boolProp[@name='TestElement.enabled']")
+        if enabled_prop is not None and enabled_prop.text:
+            self.test_plan['test_plan']['enabled'] = enabled_prop.text.lower() == 'true'
+
+        # Extract functional mode
+        functional_prop = test_plan_elem.find(".//boolProp[@name='TestPlan.functional_mode']")
+        if functional_prop is not None and functional_prop.text:
+            self.test_plan['test_plan']['functional_mode'] = functional_prop.text.lower() == 'true'
+
+        # Extract serialize threadgroups
+        serialize_prop = test_plan_elem.find(".//boolProp[@name='TestPlan.serialize_threadgroups']")
+        if serialize_prop is not None and serialize_prop.text:
+            self.test_plan['test_plan']['serialize_threadgroups'] = serialize_prop.text.lower() == 'true'
+
+        self.logger.debug(f"Extracted TestPlan: {self.test_plan['test_plan']['name']}")
+
+    def _extract_user_variables(self, test_plan_elem: ET.Element) -> None:
+        """
+        Extract user defined variables from TestPlan.
+
+        Args:
+            test_plan_elem: TestPlan XML element
+        """
+        # Find Arguments (UserDefinedVariables) element
+        arguments_elem = test_plan_elem.find(f".//{JMETER_USER_DEFINED_VARIABLES}")
+        if arguments_elem is None:
+            return
+
+        # Find collection of arguments
+        collection = arguments_elem.find(".//collectionProp[@name='Arguments.arguments']")
+        if collection is None:
+            return
+
+        # Extract each variable
+        for arg_elem in collection.findall(".//elementProp"):
+            var_name_prop = arg_elem.find(".//stringProp[@name='Argument.name']")
+            var_value_prop = arg_elem.find(".//stringProp[@name='Argument.value']")
+
+            if var_name_prop is not None and var_name_prop.text:
+                var_name = var_name_prop.text
+                var_value = var_value_prop.text if var_value_prop is not None else ''
+
+                self.test_plan['variables'][var_name] = var_value
+                self.logger.debug(f"Extracted variable: {var_name} = {var_value}")
 
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
