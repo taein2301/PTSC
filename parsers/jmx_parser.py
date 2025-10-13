@@ -14,7 +14,8 @@ from utils.helpers import read_file, format_error_message
 from utils.constants import (
     JMETER_HASH_TREE,
     JMETER_TEST_PLAN,
-    JMETER_USER_DEFINED_VARIABLES
+    JMETER_USER_DEFINED_VARIABLES,
+    JMETER_THREAD_GROUP
 )
 
 
@@ -280,6 +281,109 @@ class JMXParser:
                 self.test_plan['variables'][var_name] = var_value
                 self.logger.debug(f"Extracted variable: {var_name} = {var_value}")
 
+    def _parse_thread_group(self, thread_group_elem: ET.Element) -> None:
+        """
+        Parse ThreadGroup element and extract its properties.
+
+        Args:
+            thread_group_elem: ThreadGroup XML element
+
+        Extracts:
+        - Thread count (num_threads)
+        - Ramp-up time (ramp_time)
+        - Loop count (loops)
+        - Duration and delay (scheduler settings)
+        - On sample error action
+        """
+        thread_group = {
+            'name': self._get_element_name(thread_group_elem),
+            'enabled': self._get_element_enabled(thread_group_elem),
+            'num_threads': 1,
+            'ramp_time': 1,
+            'loops': 1,
+            'continue_forever': False,
+            'scheduler': False,
+            'duration': 0,
+            'delay': 0,
+            'on_sample_error': 'continue',
+            'comments': '',
+            'samplers': []
+        }
+
+        # Extract number of threads
+        num_threads_prop = thread_group_elem.find(".//stringProp[@name='ThreadGroup.num_threads']")
+        if num_threads_prop is not None and num_threads_prop.text:
+            try:
+                thread_group['num_threads'] = int(num_threads_prop.text)
+            except ValueError:
+                self.warnings.append(f"Invalid num_threads value: {num_threads_prop.text}")
+
+        # Extract ramp-up time
+        ramp_time_prop = thread_group_elem.find(".//stringProp[@name='ThreadGroup.ramp_time']")
+        if ramp_time_prop is not None and ramp_time_prop.text:
+            try:
+                thread_group['ramp_time'] = int(ramp_time_prop.text)
+            except ValueError:
+                self.warnings.append(f"Invalid ramp_time value: {ramp_time_prop.text}")
+
+        # Extract loop controller settings
+        loop_controller = thread_group_elem.find(".//elementProp[@name='ThreadGroup.main_controller']")
+        if loop_controller is not None:
+            # Check if continue forever
+            continue_forever_prop = loop_controller.find(".//boolProp[@name='LoopController.continue_forever']")
+            if continue_forever_prop is not None and continue_forever_prop.text:
+                thread_group['continue_forever'] = continue_forever_prop.text.lower() == 'true'
+
+            # Extract loop count
+            loops_prop = loop_controller.find(".//stringProp[@name='LoopController.loops']")
+            if loops_prop is not None and loops_prop.text:
+                try:
+                    # Handle special value "-1" for infinite
+                    if loops_prop.text == '-1':
+                        thread_group['loops'] = -1
+                        thread_group['continue_forever'] = True
+                    else:
+                        thread_group['loops'] = int(loops_prop.text)
+                except ValueError:
+                    self.warnings.append(f"Invalid loops value: {loops_prop.text}")
+
+        # Extract scheduler settings
+        scheduler_prop = thread_group_elem.find(".//boolProp[@name='ThreadGroup.scheduler']")
+        if scheduler_prop is not None and scheduler_prop.text:
+            thread_group['scheduler'] = scheduler_prop.text.lower() == 'true'
+
+        # Extract duration
+        duration_prop = thread_group_elem.find(".//stringProp[@name='ThreadGroup.duration']")
+        if duration_prop is not None and duration_prop.text:
+            try:
+                thread_group['duration'] = int(duration_prop.text)
+            except ValueError:
+                self.warnings.append(f"Invalid duration value: {duration_prop.text}")
+
+        # Extract delay
+        delay_prop = thread_group_elem.find(".//stringProp[@name='ThreadGroup.delay']")
+        if delay_prop is not None and delay_prop.text:
+            try:
+                thread_group['delay'] = int(delay_prop.text)
+            except ValueError:
+                self.warnings.append(f"Invalid delay value: {delay_prop.text}")
+
+        # Extract on sample error action
+        on_error_prop = thread_group_elem.find(".//stringProp[@name='ThreadGroup.on_sample_error']")
+        if on_error_prop is not None and on_error_prop.text:
+            thread_group['on_sample_error'] = on_error_prop.text
+
+        # Extract comments
+        comments_prop = thread_group_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            thread_group['comments'] = comments_prop.text
+
+        self.test_plan['thread_groups'].append(thread_group)
+        self.logger.info(f"Parsed ThreadGroup: {thread_group['name']} "
+                         f"({thread_group['num_threads']} threads, "
+                         f"{thread_group['ramp_time']}s ramp-up, "
+                         f"{thread_group['loops']} loops)")
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -360,6 +464,11 @@ class JMXParser:
             element: XML element
             element_type: Type of element
         """
+        # Handle ThreadGroup specially
+        if element_type == JMETER_THREAD_GROUP:
+            self._parse_thread_group(element)
+            return
+
         # Store element info
         element_info = {
             'type': element_type,
