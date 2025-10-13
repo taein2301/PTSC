@@ -10,23 +10,23 @@
 - [x] 프로젝트 디렉토리 구조 생성
 
 ### TASK-002: Python 가상환경 설정 (.venv)
-- [ ] Python 3.9+ 설치 확인
-- [ ] .venv 가상환경 생성
+- [x] Python 3.9+ 설치 확인
+- [x] .venv 가상환경 생성
   ```bash
   python -m venv .venv
   ```
-- [ ] 가상환경 활성화 스크립트 확인
+- [x] 가상환경 활성화 스크립트 확인
   - Windows: `.venv\Scripts\activate`
   - Mac/Linux: `source .venv/bin/activate`
-- [ ] 가상환경 활성화 테스트
-- [ ] pip 업그레이드
+- [x] 가상환경 활성화 테스트
+- [x] pip 업그레이드
   ```bash
   python -m pip install --upgrade pip
   ```
-- [ ] .gitignore에 .venv/ 추가 확인
+- [x] .gitignore에 .venv/ 추가 확인
 
 ### TASK-003: 의존성 패키지 설치
-- [ ] requirements.txt 파일 작성
+- [x] requirements.txt 파일 작성
   ```
   streamlit>=1.28.0
   lxml>=4.9.0
@@ -45,15 +45,15 @@
   mypy>=1.5.0
   ipython>=8.0.0
   ```
-- [ ] 가상환경에 패키지 설치
+- [x] 가상환경에 패키지 설치
   ```bash
   pip install -r requirements.txt
   ```
-- [ ] 설치된 패키지 확인
+- [x] 설치된 패키지 확인
   ```bash
   pip list
   ```
-- [ ] requirements.txt 동결 (freeze)
+- [x] requirements.txt 동결 (freeze)
   ```bash
   pip freeze > requirements-lock.txt
   ```
@@ -102,25 +102,25 @@
   ```
 
 ### TASK-006: 프로젝트 구조 생성
-- [ ] `converters/` 디렉토리 및 `__init__.py` 생성
-- [ ] `parsers/` 디렉토리 및 `__init__.py` 생성
-- [ ] `generators/` 디렉토리 및 `__init__.py` 생성
-- [ ] `utils/` 디렉토리 및 `__init__.py` 생성
-- [ ] `tests/` 디렉토리 및 `__init__.py` 생성
-- [ ] `assets/` 디렉토리 생성 (로고, 아이콘 등)
-- [ ] `samples/` 디렉토리 생성 (샘플 파일)
+- [x] `converters/` 디렉토리 및 `__init__.py` 생성
+- [x] `parsers/` 디렉토리 및 `__init__.py` 생성
+- [x] `generators/` 디렉토리 및 `__init__.py` 생성
+- [x] `utils/` 디렉토리 및 `__init__.py` 생성
+- [x] `tests/` 디렉토리 및 `__init__.py` 생성
+- [x] `assets/` 디렉토리 생성 (로고, 아이콘 등)
+- [x] `samples/` 디렉토리 생성 (샘플 파일)
 
 ### TASK-007: 가상환경 검증
-- [ ] Python 버전 확인
+- [x] Python 버전 확인
   ```bash
   python --version
   ```
-- [ ] 가상환경 내 pip 위치 확인
+- [x] 가상환경 내 pip 위치 확인
   ```bash
   which pip  # Mac/Linux
   where pip  # Windows
   ```
-- [ ] Streamlit 설치 확인
+- [x] Streamlit 설치 확인
   ```bash
   streamlit --version
   ```
