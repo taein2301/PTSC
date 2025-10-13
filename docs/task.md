@@ -239,10 +239,10 @@
 - [x] 파싱 에러 핸들링
 
 ### TASK-302: TestPlan 파싱
-- [ ] TestPlan 엘리먼트 추출 함수
-- [ ] TestPlan 속성 파싱 (이름, 설명)
-- [ ] UserDefinedVariables 추출
-- [ ] 전역 설정 파싱
+- [x] TestPlan 엘리먼트 추출 함수
+- [x] TestPlan 속성 파싱 (이름, 설명)
+- [x] UserDefinedVariables 추출
+- [x] 전역 설정 파싱
 
 ### TASK-303: ThreadGroup 파싱
 - [ ] ThreadGroup 엘리먼트 추출 함수
