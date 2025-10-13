@@ -231,12 +231,12 @@
 ## Phase 3: JMeter JMX 파싱 엔진 개발
 
 ### TASK-301: JMX 파일 로더
-- [ ] `parsers/jmx_parser.py` 파일 생성
-- [ ] JMXParser 클래스 정의
-- [ ] XML 파일 읽기 함수
-- [ ] XML 트리 구조 파싱
-- [ ] 인코딩 처리 (UTF-8, EUC-KR 등)
-- [ ] 파싱 에러 핸들링
+- [x] `parsers/jmx_parser.py` 파일 생성
+- [x] JMXParser 클래스 정의
+- [x] XML 파일 읽기 함수
+- [x] XML 트리 구조 파싱
+- [x] 인코딩 처리 (UTF-8, EUC-KR 등)
+- [x] 파싱 에러 핸들링
 
 ### TASK-302: TestPlan 파싱
 - [ ] TestPlan 엘리먼트 추출 함수
