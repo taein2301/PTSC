@@ -59,10 +59,21 @@ class JMeterToLRConverter(BaseConverter):
             Dictionary with conversion results
         """
         try:
-            # Parse JMX content
-            parse_result = self.parser.parse(content)
+            # Parse XML content directly
+            success, error = self.parser._parse_xml(content)
+            if not success:
+                self.add_error(error)
+                return {
+                    'success': False,
+                    'data': None,
+                    'errors': self.errors,
+                    'warnings': self.warnings
+                }
 
-            if not parse_result.get('success', False):
+            # Parse JMX structure
+            success, parse_result = self.parser.parse()
+
+            if not success:
                 error_msg = parse_result.get('error', 'Unknown parsing error')
                 self.add_error(error_msg)
                 return {
@@ -72,15 +83,18 @@ class JMeterToLRConverter(BaseConverter):
                     'warnings': self.warnings
                 }
 
+            # Reorganize parsed data to group elements with thread groups
+            reorganized_data = self._reorganize_parsed_data(parse_result)
+
             # Track conversion statistics
-            self._analyze_parsed_data(parse_result)
+            self._analyze_parsed_data(reorganized_data)
 
             # Add conversion warnings for unsupported elements
-            self._check_for_unsupported_elements(parse_result)
+            self._check_for_unsupported_elements(reorganized_data)
 
             return {
                 'success': True,
-                'data': parse_result,
+                'data': reorganized_data,
                 'errors': self.errors,
                 'warnings': self.warnings
             }
@@ -111,6 +125,68 @@ class JMeterToLRConverter(BaseConverter):
         except Exception as e:
             self.add_error(f"{ERROR_CODES['CONVERSION_ERROR']}: Failed to generate output - {str(e)}")
             return f"/* Error generating LoadRunner script: {str(e)} */"
+
+    def _reorganize_parsed_data(self, parse_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Reorganize parsed data to group elements with their parent thread groups.
+
+        Args:
+            parse_result: Raw parsed data from JMXParser
+
+        Returns:
+            Reorganized data structure with elements grouped properly
+        """
+        # Extract elements from the flat list
+        elements = parse_result.get('elements', [])
+        thread_groups = parse_result.get('thread_groups', [])
+
+        # Categorize elements
+        samplers = [e for e in elements if e.get('type') in ['HTTPSampler', 'HTTPSamplerProxy']]
+        headers = [e for e in elements if e.get('type') == 'HeaderManager']
+        extractors = [e for e in elements if e.get('type') in ['RegexExtractor', 'JSONExtractor']]
+        timers = [e for e in elements if e.get('type') == 'ConstantTimer']
+        assertions = [e for e in elements if e.get('type') == 'ResponseAssertion']
+        controllers = [e for e in elements if e.get('type') in ['TransactionController', 'LoopController', 'IfController']]
+        cookies = [e for e in elements if e.get('type') == 'CookieManager']
+
+        # If no thread groups exist, create a default one
+        if not thread_groups:
+            thread_groups = [{
+                'name': 'Thread Group',
+                'enabled': True,
+                'num_threads': 1,
+                'ramp_time': 1,
+                'loops': 1,
+                'samplers': [],
+                'headers': [],
+                'extractors': [],
+                'timers': [],
+                'assertions': [],
+                'controllers': [],
+                'cookies': []
+            }]
+
+        # Assign elements to the first thread group (simplified approach)
+        # In a more sophisticated implementation, we'd track parent-child relationships
+        if thread_groups:
+            thread_groups[0]['samplers'] = samplers
+            thread_groups[0]['headers'] = headers
+            thread_groups[0]['extractors'] = extractors
+            thread_groups[0]['timers'] = timers
+            thread_groups[0]['assertions'] = assertions
+            thread_groups[0]['controllers'] = controllers
+            thread_groups[0]['cookies'] = cookies
+
+        # Extract user variables from TestPlan variables
+        user_vars = parse_result.get('variables', {})
+
+        return {
+            'test_plan': parse_result.get('test_plan', {}),
+            'thread_groups': thread_groups,
+            'user_variables': user_vars,
+            'variables': user_vars,
+            'elements': elements
+        }
 
     def _analyze_parsed_data(self, parse_result: Dict[str, Any]) -> None:
         """
