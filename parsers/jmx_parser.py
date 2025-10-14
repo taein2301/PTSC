@@ -22,7 +22,8 @@ from utils.constants import (
     JMETER_REGEX_EXTRACTOR,
     JMETER_JSON_EXTRACTOR,
     JMETER_RESPONSE_ASSERTION,
-    JMETER_CONSTANT_TIMER
+    JMETER_CONSTANT_TIMER,
+    JMETER_TRANSACTION_CONTROLLER
 )
 
 
@@ -886,6 +887,49 @@ class JMXParser:
 
         return timer
 
+    def _parse_transaction_controller(self, controller_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse TransactionController element.
+
+        Args:
+            controller_elem: TransactionController XML element
+
+        Returns:
+            Dictionary containing transaction controller information
+
+        Extracts:
+        - Transaction name
+        - Include timers flag
+        - Generate parent sample flag
+        """
+        transaction: Dict[str, Any] = {
+            'type': 'TransactionController',
+            'name': self._get_element_name(controller_elem),
+            'enabled': self._get_element_enabled(controller_elem),
+            'include_timers': True,
+            'generate_parent_sample': False,
+            'comments': ''
+        }
+
+        # Extract include timers
+        include_timers_prop = controller_elem.find(".//boolProp[@name='TransactionController.includeTimers']")
+        if include_timers_prop is not None and include_timers_prop.text:
+            transaction['include_timers'] = include_timers_prop.text.lower() == 'true'
+
+        # Extract generate parent sample
+        parent_sample_prop = controller_elem.find(".//boolProp[@name='TransactionController.parent']")
+        if parent_sample_prop is not None and parent_sample_prop.text:
+            transaction['generate_parent_sample'] = parent_sample_prop.text.lower() == 'true'
+
+        # Extract comments
+        comments_prop = controller_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            transaction['comments'] = comments_prop.text
+
+        self.logger.debug(f"Parsed TransactionController: {transaction['name']}")
+
+        return transaction
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -1005,6 +1049,12 @@ class JMXParser:
         if element_type == JMETER_CONSTANT_TIMER:
             timer = self._parse_constant_timer(element)
             self.test_plan['elements'].append(timer)
+            return
+
+        # Handle Transaction Controller specially
+        if element_type == JMETER_TRANSACTION_CONTROLLER:
+            transaction = self._parse_transaction_controller(element)
+            self.test_plan['elements'].append(transaction)
             return
 
         # Store element info
