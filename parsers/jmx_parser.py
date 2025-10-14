@@ -15,7 +15,9 @@ from utils.constants import (
     JMETER_HASH_TREE,
     JMETER_TEST_PLAN,
     JMETER_USER_DEFINED_VARIABLES,
-    JMETER_THREAD_GROUP
+    JMETER_THREAD_GROUP,
+    JMETER_HTTP_SAMPLER,
+    JMETER_HTTP_SAMPLER_OLD
 )
 
 
@@ -384,6 +386,178 @@ class JMXParser:
                          f"{thread_group['ramp_time']}s ramp-up, "
                          f"{thread_group['loops']} loops)")
 
+    def _parse_http_sampler(self, sampler_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse HTTP Sampler element and extract its properties.
+
+        Args:
+            sampler_elem: HTTPSamplerProxy XML element
+
+        Returns:
+            Dictionary containing sampler information
+
+        Extracts:
+        - HTTP method (GET, POST, PUT, DELETE, etc.)
+        - Protocol (http/https)
+        - Domain/server
+        - Port
+        - Path
+        - Parameters (query string or POST data)
+        - Body data
+        - Follow redirects settings
+        - Use keepalive settings
+        """
+        sampler = {
+            'type': 'HTTPSampler',
+            'name': self._get_element_name(sampler_elem),
+            'enabled': self._get_element_enabled(sampler_elem),
+            'method': 'GET',
+            'protocol': 'http',
+            'domain': '',
+            'port': '',
+            'path': '/',
+            'parameters': [],
+            'body': '',
+            'encoding': 'UTF-8',
+            'follow_redirects': True,
+            'auto_redirects': False,
+            'use_keepalive': True,
+            'do_multipart_post': False,
+            'connect_timeout': '',
+            'response_timeout': '',
+            'comments': ''
+        }
+
+        # Extract HTTP method
+        method_prop = sampler_elem.find(".//stringProp[@name='HTTPSampler.method']")
+        if method_prop is not None and method_prop.text:
+            sampler['method'] = method_prop.text.upper()
+
+        # Extract protocol
+        protocol_prop = sampler_elem.find(".//stringProp[@name='HTTPSampler.protocol']")
+        if protocol_prop is not None and protocol_prop.text:
+            sampler['protocol'] = protocol_prop.text.lower()
+
+        # Extract domain
+        domain_prop = sampler_elem.find(".//stringProp[@name='HTTPSampler.domain']")
+        if domain_prop is not None and domain_prop.text:
+            sampler['domain'] = domain_prop.text
+
+        # Extract port
+        port_prop = sampler_elem.find(".//stringProp[@name='HTTPSampler.port']")
+        if port_prop is not None and port_prop.text:
+            sampler['port'] = port_prop.text
+
+        # Extract path
+        path_prop = sampler_elem.find(".//stringProp[@name='HTTPSampler.path']")
+        if path_prop is not None and path_prop.text:
+            sampler['path'] = path_prop.text
+
+        # Extract encoding
+        encoding_prop = sampler_elem.find(".//stringProp[@name='HTTPSampler.contentEncoding']")
+        if encoding_prop is not None and encoding_prop.text:
+            sampler['encoding'] = encoding_prop.text
+
+        # Extract connect timeout
+        connect_timeout_prop = sampler_elem.find(".//stringProp[@name='HTTPSampler.connect_timeout']")
+        if connect_timeout_prop is not None and connect_timeout_prop.text:
+            sampler['connect_timeout'] = connect_timeout_prop.text
+
+        # Extract response timeout
+        response_timeout_prop = sampler_elem.find(".//stringProp[@name='HTTPSampler.response_timeout']")
+        if response_timeout_prop is not None and response_timeout_prop.text:
+            sampler['response_timeout'] = response_timeout_prop.text
+
+        # Extract follow redirects
+        follow_redirects_prop = sampler_elem.find(".//boolProp[@name='HTTPSampler.follow_redirects']")
+        if follow_redirects_prop is not None and follow_redirects_prop.text:
+            sampler['follow_redirects'] = follow_redirects_prop.text.lower() == 'true'
+
+        # Extract auto redirects
+        auto_redirects_prop = sampler_elem.find(".//boolProp[@name='HTTPSampler.auto_redirects']")
+        if auto_redirects_prop is not None and auto_redirects_prop.text:
+            sampler['auto_redirects'] = auto_redirects_prop.text.lower() == 'true'
+
+        # Extract use keepalive
+        use_keepalive_prop = sampler_elem.find(".//boolProp[@name='HTTPSampler.use_keepalive']")
+        if use_keepalive_prop is not None and use_keepalive_prop.text:
+            sampler['use_keepalive'] = use_keepalive_prop.text.lower() == 'true'
+
+        # Extract do multipart post
+        do_multipart_prop = sampler_elem.find(".//boolProp[@name='HTTPSampler.DO_MULTIPART_POST']")
+        if do_multipart_prop is not None and do_multipart_prop.text:
+            sampler['do_multipart_post'] = do_multipart_prop.text.lower() == 'true'
+
+        # Extract comments
+        comments_prop = sampler_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            sampler['comments'] = comments_prop.text
+
+        # Extract parameters (Arguments)
+        self._extract_http_arguments(sampler_elem, sampler)
+
+        # Extract POST body
+        self._extract_http_body(sampler_elem, sampler)
+
+        self.logger.debug(f"Parsed HTTP Sampler: {sampler['method']} {sampler['path']}")
+
+        return sampler
+
+    def _extract_http_arguments(self, sampler_elem: ET.Element, sampler: Dict[str, Any]) -> None:
+        """
+        Extract HTTP arguments (query parameters or POST parameters).
+
+        Args:
+            sampler_elem: HTTPSampler XML element
+            sampler: Sampler dictionary to update
+        """
+        # Find Arguments element
+        arguments_elem = sampler_elem.find(".//elementProp[@name='HTTPsampler.Arguments']")
+        if arguments_elem is None:
+            return
+
+        # Find collection of arguments
+        collection = arguments_elem.find(".//collectionProp[@name='Arguments.arguments']")
+        if collection is None:
+            return
+
+        # Extract each parameter
+        for arg_elem in collection.findall(".//elementProp"):
+            param_name_prop = arg_elem.find(".//stringProp[@name='Argument.name']")
+            param_value_prop = arg_elem.find(".//stringProp[@name='Argument.value']")
+            param_metadata_prop = arg_elem.find(".//stringProp[@name='Argument.metadata']")
+
+            if param_name_prop is not None:
+                param = {
+                    'name': param_name_prop.text or '',
+                    'value': param_value_prop.text if param_value_prop is not None else '',
+                    'metadata': param_metadata_prop.text if param_metadata_prop is not None else '='
+                }
+                sampler['parameters'].append(param)
+
+    def _extract_http_body(self, sampler_elem: ET.Element, sampler: Dict[str, Any]) -> None:
+        """
+        Extract HTTP request body data.
+
+        Args:
+            sampler_elem: HTTPSampler XML element
+            sampler: Sampler dictionary to update
+        """
+        # Check for postBodyRaw (raw body data)
+        post_body_raw = sampler_elem.find(".//boolProp[@name='HTTPSampler.postBodyRaw']")
+        if post_body_raw is not None and post_body_raw.text and post_body_raw.text.lower() == 'true':
+            # Extract raw body from Arguments
+            arguments_elem = sampler_elem.find(".//elementProp[@name='HTTPsampler.Arguments']")
+            if arguments_elem is not None:
+                collection = arguments_elem.find(".//collectionProp[@name='Arguments.arguments']")
+                if collection is not None:
+                    # In raw mode, the first argument contains the body
+                    first_arg = collection.find(".//elementProp")
+                    if first_arg is not None:
+                        value_prop = first_arg.find(".//stringProp[@name='Argument.value']")
+                        if value_prop is not None and value_prop.text:
+                            sampler['body'] = value_prop.text
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -467,6 +641,12 @@ class JMXParser:
         # Handle ThreadGroup specially
         if element_type == JMETER_THREAD_GROUP:
             self._parse_thread_group(element)
+            return
+
+        # Handle HTTP Sampler specially
+        if element_type in [JMETER_HTTP_SAMPLER, JMETER_HTTP_SAMPLER_OLD]:
+            sampler = self._parse_http_sampler(element)
+            self.test_plan['elements'].append(sampler)
             return
 
         # Store element info
