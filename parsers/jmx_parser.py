@@ -25,7 +25,8 @@ from utils.constants import (
     JMETER_CONSTANT_TIMER,
     JMETER_TRANSACTION_CONTROLLER,
     JMETER_IF_CONTROLLER,
-    JMETER_LOOP_CONTROLLER
+    JMETER_LOOP_CONTROLLER,
+    JMETER_COOKIE_MANAGER
 )
 
 
@@ -1026,6 +1027,69 @@ class JMXParser:
 
         return loop_controller
 
+    def _parse_cookie_manager(self, cookie_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse CookieManager element for cookie handling.
+
+        Args:
+            cookie_elem: CookieManager XML element
+
+        Returns:
+            Dictionary containing cookie manager information
+
+        Extracts:
+        - Clear cookies each iteration flag
+        - Cookie policy
+        - Predefined cookies
+        """
+        cookies_list: List[Dict[str, str]] = []
+        cookie_manager: Dict[str, Any] = {
+            'type': 'CookieManager',
+            'name': self._get_element_name(cookie_elem),
+            'enabled': self._get_element_enabled(cookie_elem),
+            'clear_each_iteration': False,
+            'cookie_policy': 'standard',
+            'cookies': cookies_list,
+            'comments': ''
+        }
+
+        # Extract clear each iteration
+        clear_prop = cookie_elem.find(".//boolProp[@name='CookieManager.clearEachIteration']")
+        if clear_prop is not None and clear_prop.text:
+            cookie_manager['clear_each_iteration'] = clear_prop.text.lower() == 'true'
+
+        # Extract cookie policy
+        policy_prop = cookie_elem.find(".//stringProp[@name='CookieManager.policy']")
+        if policy_prop is not None and policy_prop.text:
+            cookie_manager['cookie_policy'] = policy_prop.text
+
+        # Extract predefined cookies
+        collection = cookie_elem.find(".//collectionProp[@name='CookieManager.cookies']")
+        if collection is not None:
+            for cookie_prop in collection.findall(".//elementProp"):
+                name_prop = cookie_prop.find(".//stringProp[@name='Cookie.name']")
+                value_prop = cookie_prop.find(".//stringProp[@name='Cookie.value']")
+                domain_prop = cookie_prop.find(".//stringProp[@name='Cookie.domain']")
+                path_prop = cookie_prop.find(".//stringProp[@name='Cookie.path']")
+
+                if name_prop is not None:
+                    cookie: Dict[str, str] = {
+                        'name': name_prop.text or '',
+                        'value': value_prop.text or '' if value_prop is not None else '',
+                        'domain': domain_prop.text or '' if domain_prop is not None else '',
+                        'path': path_prop.text or '' if path_prop is not None else ''
+                    }
+                    cookies_list.append(cookie)
+
+        # Extract comments
+        comments_prop = cookie_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            cookie_manager['comments'] = comments_prop.text
+
+        self.logger.debug(f"Parsed CookieManager with {len(cookies_list)} predefined cookies")
+
+        return cookie_manager
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -1163,6 +1227,12 @@ class JMXParser:
         if element_type == JMETER_LOOP_CONTROLLER:
             loop_controller = self._parse_loop_controller(element)
             self.test_plan['elements'].append(loop_controller)
+            return
+
+        # Handle Cookie Manager specially
+        if element_type == JMETER_COOKIE_MANAGER:
+            cookie_manager = self._parse_cookie_manager(element)
+            self.test_plan['elements'].append(cookie_manager)
             return
 
         # Store element info
