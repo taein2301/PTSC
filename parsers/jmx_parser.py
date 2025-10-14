@@ -18,7 +18,8 @@ from utils.constants import (
     JMETER_THREAD_GROUP,
     JMETER_HTTP_SAMPLER,
     JMETER_HTTP_SAMPLER_OLD,
-    JMETER_HEADER_MANAGER
+    JMETER_HEADER_MANAGER,
+    JMETER_REGEX_EXTRACTOR
 )
 
 
@@ -606,6 +607,89 @@ class JMXParser:
 
         return header_manager
 
+    def _parse_regex_extractor(self, extractor_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse RegexExtractor element for correlation.
+
+        Args:
+            extractor_elem: RegexExtractor XML element
+
+        Returns:
+            Dictionary containing regex extractor information
+
+        Extracts:
+        - Reference name (variable name to store result)
+        - Regular expression pattern
+        - Template (format for extracted value)
+        - Match number (which occurrence to extract)
+        - Default value
+        - Field to check (body, headers, etc.)
+        """
+        regex_extractor: Dict[str, Any] = {
+            'type': 'RegexExtractor',
+            'name': self._get_element_name(extractor_elem),
+            'enabled': self._get_element_enabled(extractor_elem),
+            'refname': '',
+            'regex': '',
+            'template': '$1$',
+            'match_number': 1,
+            'default': '',
+            'field_to_check': 'body',
+            'comments': ''
+        }
+
+        # Extract reference name (variable name)
+        refname_prop = extractor_elem.find(".//stringProp[@name='RegexExtractor.refname']")
+        if refname_prop is not None and refname_prop.text:
+            regex_extractor['refname'] = refname_prop.text
+
+        # Extract regex pattern
+        regex_prop = extractor_elem.find(".//stringProp[@name='RegexExtractor.regex']")
+        if regex_prop is not None and regex_prop.text:
+            regex_extractor['regex'] = regex_prop.text
+
+        # Extract template
+        template_prop = extractor_elem.find(".//stringProp[@name='RegexExtractor.template']")
+        if template_prop is not None and template_prop.text:
+            regex_extractor['template'] = template_prop.text
+
+        # Extract match number
+        match_number_prop = extractor_elem.find(".//stringProp[@name='RegexExtractor.match_number']")
+        if match_number_prop is not None and match_number_prop.text:
+            try:
+                regex_extractor['match_number'] = int(match_number_prop.text)
+            except ValueError:
+                self.warnings.append(f"Invalid match_number: {match_number_prop.text}")
+
+        # Extract default value
+        default_prop = extractor_elem.find(".//stringProp[@name='RegexExtractor.default']")
+        if default_prop is not None and default_prop.text:
+            regex_extractor['default'] = default_prop.text
+
+        # Extract field to check
+        field_prop = extractor_elem.find(".//stringProp[@name='RegexExtractor.useHeaders']")
+        if field_prop is not None and field_prop.text:
+            field_value = field_prop.text.lower()
+            if field_value == 'true':
+                regex_extractor['field_to_check'] = 'headers'
+            elif field_value == 'request_headers':
+                regex_extractor['field_to_check'] = 'request_headers'
+            elif field_value == 'url':
+                regex_extractor['field_to_check'] = 'url'
+            elif field_value == 'code':
+                regex_extractor['field_to_check'] = 'response_code'
+            elif field_value == 'message':
+                regex_extractor['field_to_check'] = 'response_message'
+
+        # Extract comments
+        comments_prop = extractor_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            regex_extractor['comments'] = comments_prop.text
+
+        self.logger.debug(f"Parsed RegexExtractor: {regex_extractor['refname']}")
+
+        return regex_extractor
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -701,6 +785,12 @@ class JMXParser:
         if element_type == JMETER_HEADER_MANAGER:
             header_manager = self._parse_header_manager(element)
             self.test_plan['elements'].append(header_manager)
+            return
+
+        # Handle Regex Extractor specially
+        if element_type == JMETER_REGEX_EXTRACTOR:
+            regex_extractor = self._parse_regex_extractor(element)
+            self.test_plan['elements'].append(regex_extractor)
             return
 
         # Store element info
