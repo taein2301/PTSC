@@ -13,6 +13,68 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
 
+class CodeFormatter:
+    """
+    Code formatter class for various code formatting operations.
+    """
+
+    def __init__(self):
+        """Initialize the code formatter"""
+        pass
+
+    def format_c_code(self, code: str, indent_size: int = 4) -> str:
+        """
+        Format C code with proper indentation.
+
+        Args:
+            code: C code as string
+            indent_size: Number of spaces per indentation level
+
+        Returns:
+            Formatted C code
+        """
+        return format_c_code(code, indent_size)
+
+    def escape_c_string(self, text: str) -> str:
+        """
+        Escape special characters in a string for C code.
+
+        Args:
+            text: String to escape
+
+        Returns:
+            Escaped string safe for use in C code
+        """
+        if not text:
+            return ""
+
+        # Escape backslash first
+        result = text.replace('\\', '\\\\')
+        # Escape double quotes
+        result = result.replace('"', '\\"')
+        # Escape newlines
+        result = result.replace('\n', '\\n')
+        # Escape carriage returns
+        result = result.replace('\r', '\\r')
+        # Escape tabs
+        result = result.replace('\t', '\\t')
+
+        return result
+
+    def format_xml_code(self, xml_string: str, indent_size: int = 2) -> str:
+        """
+        Format XML code with proper indentation.
+
+        Args:
+            xml_string: XML content as string
+            indent_size: Number of spaces per indentation level
+
+        Returns:
+            Formatted XML string
+        """
+        return format_xml_code(xml_string, indent_size)
+
+
 def format_c_code(code: str, indent_size: int = 4) -> str:
     """
     Format C code with proper indentation.

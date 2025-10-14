@@ -15,6 +15,84 @@ from datetime import datetime
 from typing import Optional, Tuple
 
 
+class StringHelper:
+    """
+    String manipulation helper class.
+    """
+
+    def __init__(self):
+        """Initialize the string helper"""
+        pass
+
+    def sanitize_variable_name(self, name: str) -> str:
+        """
+        Sanitize a variable name for use in code.
+
+        Args:
+            name: Variable name to sanitize
+
+        Returns:
+            Sanitized variable name
+
+        Example:
+            >>> helper = StringHelper()
+            >>> helper.sanitize_variable_name("my-variable")
+            'my_variable'
+        """
+        # Replace invalid characters with underscore
+        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+
+        # Ensure it doesn't start with a number
+        if sanitized and sanitized[0].isdigit():
+            sanitized = '_' + sanitized
+
+        # Remove consecutive underscores
+        sanitized = re.sub(r'_+', '_', sanitized)
+
+        # Remove leading/trailing underscores
+        sanitized = sanitized.strip('_')
+
+        return sanitized if sanitized else 'var'
+
+    def convert_jmeter_to_lr_variable(self, text: str) -> str:
+        """
+        Convert JMeter variable references to LoadRunner format.
+
+        Args:
+            text: Text containing JMeter variables (${varname})
+
+        Returns:
+            Text with LoadRunner variable format
+
+        Example:
+            >>> helper = StringHelper()
+            >>> helper.convert_jmeter_to_lr_variable("Hello ${username}")
+            'Hello {username}'
+        """
+        # Convert ${var} to {var}
+        converted = re.sub(r'\$\{([^}]+)\}', r'{\1}', text)
+        return converted
+
+    def convert_lr_to_jmeter_variable(self, text: str) -> str:
+        """
+        Convert LoadRunner variable references to JMeter format.
+
+        Args:
+            text: Text containing LoadRunner variables ({varname})
+
+        Returns:
+            Text with JMeter variable format
+
+        Example:
+            >>> helper = StringHelper()
+            >>> helper.convert_lr_to_jmeter_variable("Hello {username}")
+            'Hello ${username}'
+        """
+        # Convert {var} to ${var}
+        converted = re.sub(r'(?<!\$)\{([^}]+)\}', r'${\1}', text)
+        return converted
+
+
 def read_file(file_path: str, encoding: Optional[str] = None) -> Tuple[bool, str, str]:
     """
     Read a file with automatic encoding detection.

@@ -353,6 +353,35 @@ class LRGenerator:
 
         return self._indent(f'{LR_FUNCTIONS["WEB_ADD_HEADER"]}("{name}", "{value}");')
 
+    def _generate_cookie_call(self, cookie: Dict[str, Any]) -> str:
+        """
+        Generate web_add_cookie or web_set_cookie call
+
+        Args:
+            cookie: Cookie dictionary
+
+        Returns:
+            LoadRunner cookie function call
+        """
+        name = self.formatter.escape_c_string(cookie.get('name', ''))
+        value = self.formatter.escape_c_string(cookie.get('value', ''))
+        domain = cookie.get('domain', '')
+        path = cookie.get('path', '/')
+
+        lines = []
+        lines.append(self._indent(f'{LR_FUNCTIONS["WEB_ADD_COOKIE"]}('))
+        lines.append(self._indent(f'    "{name}={value};', level=1))
+
+        if domain:
+            lines.append(self._indent(f'    domain={domain};', level=1))
+
+        if path:
+            lines.append(self._indent(f'    path={path}");', level=1))
+        else:
+            lines[-1] = lines[-1].rstrip(';') + '");'
+
+        return "\n".join(lines)
+
     def _generate_extractor(self, extractor: Dict[str, Any]) -> str:
         """
         Generate correlation function (web_reg_save_param)
@@ -531,6 +560,133 @@ class LRGenerator:
         else:
             # Fallback
             return (regex, '')
+
+    def _generate_if_statement(self, condition: str, body_lines: List[str]) -> str:
+        """
+        Generate if statement for conditional execution
+
+        Args:
+            condition: Condition expression
+            body_lines: Lines of code inside if block
+
+        Returns:
+            Complete if statement
+        """
+        lines = []
+        # Convert JMeter condition to C condition if needed
+        c_condition = self._convert_condition_to_c(condition)
+
+        lines.append(self._indent(f'if ({c_condition})'))
+        lines.append(self._indent('{'))
+
+        for body_line in body_lines:
+            lines.append(self._indent(body_line, level=self.indent_level + 1))
+
+        lines.append(self._indent('}'))
+
+        return "\n".join(lines)
+
+    def _generate_for_loop(self, loop_count: int, body_lines: List[str]) -> str:
+        """
+        Generate for loop for iteration
+
+        Args:
+            loop_count: Number of iterations
+            body_lines: Lines of code inside loop
+
+        Returns:
+            Complete for loop
+        """
+        lines = []
+        lines.append(self._indent(f'for (int i = 0; i < {loop_count}; i++)'))
+        lines.append(self._indent('{'))
+
+        for body_line in body_lines:
+            lines.append(self._indent(body_line, level=self.indent_level + 1))
+
+        lines.append(self._indent('}'))
+
+        return "\n".join(lines)
+
+    def _generate_variable_save(self, var_name: str, var_value: str) -> str:
+        """
+        Generate lr_save_string call for variable assignment
+
+        Args:
+            var_name: Variable name
+            var_value: Variable value
+
+        Returns:
+            lr_save_string function call
+        """
+        escaped_value = self.formatter.escape_c_string(var_value)
+        safe_name = self.string_helper.sanitize_variable_name(var_name)
+
+        return self._indent(f'{LR_FUNCTIONS["LR_SAVE_STRING"]}("{escaped_value}", "{safe_name}");')
+
+    def _generate_error_check(self, assertion: Dict[str, Any]) -> str:
+        """
+        Generate error handling code for assertions
+
+        Args:
+            assertion: Assertion data dictionary
+
+        Returns:
+            Error checking code
+        """
+        test_field = assertion.get('test_field', 'response_data')
+        test_type = assertion.get('test_type', 'contains')
+        test_patterns = assertion.get('test_patterns', [])
+
+        lines = []
+
+        if not test_patterns:
+            return ""
+
+        # For simplicity, generate a basic check
+        for pattern in test_patterns:
+            escaped_pattern = self.formatter.escape_c_string(pattern)
+
+            if test_type in ['contains', 'matches']:
+                lines.append(self._indent('// Assertion: Check response contains expected value'))
+                lines.append(self._indent('if (/* response check failed */)'))
+                lines.append(self._indent('{'))
+                lines.append(self._indent(f'    {LR_FUNCTIONS["LR_ERROR_MESSAGE"]}("Assertion failed: Expected pattern not found - {escaped_pattern}");', level=1))
+                lines.append(self._indent(f'    {LR_FUNCTIONS["LR_ABORT"]}();', level=1))
+                lines.append(self._indent('}'))
+
+        return "\n".join(lines)
+
+    def _convert_condition_to_c(self, condition: str) -> str:
+        """
+        Convert JMeter condition expression to C syntax
+
+        Args:
+            condition: JMeter condition
+
+        Returns:
+            C-style condition
+        """
+        # Replace JMeter variable references with LoadRunner format
+        if '${' in condition:
+            condition = self.string_helper.convert_jmeter_to_lr_variable(condition)
+
+        # Convert common JMeter functions/operators to C
+        condition = condition.replace(' == ', ' == ')
+        condition = condition.replace(' eq ', ' == ')
+        condition = condition.replace(' ne ', ' != ')
+        condition = condition.replace(' gt ', ' > ')
+        condition = condition.replace(' lt ', ' < ')
+        condition = condition.replace(' && ', ' && ')
+        condition = condition.replace(' || ', ' || ')
+
+        # If condition contains LoadRunner variables, wrap in strcmp or similar
+        if '{' in condition and '}' in condition:
+            # This is a simplification - real implementation would parse properly
+            condition = condition.replace('==', '== 0 && strcmp(lr_eval_string("')
+            condition += '"), "") == 0'
+
+        return condition
 
     def _indent(self, text: str, level: int = None) -> str:
         """

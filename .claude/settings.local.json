@@ -8,7 +8,11 @@
       "Bash(.venv\\Scripts\\python.exe -m pip install:*)",
       "Bash(\".venv/Scripts/python.exe\" -m pip list)",
       "Bash(\".venv/Scripts/streamlit.exe\" --version)",
-      "Bash(\".venv/Scripts/python.exe\":*)"
+      "Bash(\".venv/Scripts/python.exe\":*)",
+      "Bash(git push:*)",
+      "Bash(.venv\\Scripts\\python.exe -m flake8:*)",
+      "Bash(.venv\\Scripts\\python.exe -m mypy:*)",
+      "Bash(\".venv/Scripts/python.exe\" -m pytest:*)"
     ],
     "deny": [],
     "ask": []

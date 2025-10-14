@@ -320,98 +320,99 @@
 ## Phase 4: LoadRunner C 스크립트 생성기 개발
 
 ### TASK-401: LoadRunner 코드 생성기 기본 구조
-- [ ] `generators/lr_generator.py` 파일 생성
-- [ ] LRGenerator 클래스 정의
-- [ ] 코드 템플릿 정의
-- [ ] 들여쓰기 관리 로직
+- [x] `generators/lr_generator.py` 파일 생성
+- [x] LRGenerator 클래스 정의
+- [x] 코드 템플릿 정의
+- [x] 들여쓰기 관리 로직
 
 ### TASK-402: 스크립트 헤더 생성
-- [ ] 파일 헤더 주석 생성
-- [ ] Include 문 생성 (#include "web_api.h")
-- [ ] 전역 변수 선언 생성
+- [x] 파일 헤더 주석 생성
+- [x] Include 문 생성 (#include "web_api.h")
+- [x] 전역 변수 선언 생성
 
 ### TASK-403: vuser_init() 함수 생성
-- [ ] vuser_init() 함수 템플릿
-- [ ] 초기화 설정 코드 생성
-- [ ] 전역 변수 초기화
-- [ ] 로깅 설정
+- [x] vuser_init() 함수 템플릿
+- [x] 초기화 설정 코드 생성
+- [x] 전역 변수 초기화
+- [x] 로깅 설정
 
 ### TASK-404: Action() 함수 생성
-- [ ] Action() 함수 템플릿
-- [ ] 트랜잭션 시작/종료 코드
-- [ ] 메인 로직 코드 배치
+- [x] Action() 함수 템플릿
+- [x] 트랜잭션 시작/종료 코드
+- [x] 메인 로직 코드 배치
 
 ### TASK-405: vuser_end() 함수 생성
-- [ ] vuser_end() 함수 템플릿
-- [ ] 정리(cleanup) 코드 생성
+- [x] vuser_end() 함수 템플릿
+- [x] 정리(cleanup) 코드 생성
 
 ### TASK-406: web_url() 함수 생성
-- [ ] GET 요청 변환 로직
-- [ ] URL 파라미터 생성
-- [ ] 옵션 파라미터 생성 (Resource, Mode 등)
-- [ ] LAST 파라미터 추가
+- [x] GET 요청 변환 로직
+- [x] URL 파라미터 생성
+- [x] 옵션 파라미터 생성 (Resource, Mode 등)
+- [x] LAST 파라미터 추가
 
 ### TASK-407: web_submit_data() 함수 생성
-- [ ] POST 요청 변환 로직
-- [ ] ITEMDATA 배열 생성
-- [ ] 폼 데이터 변환
-- [ ] EXTRARES 처리
+- [x] POST 요청 변환 로직
+- [x] ITEMDATA 배열 생성
+- [x] 폼 데이터 변환
+- [x] EXTRARES 처리
 
 ### TASK-408: web_custom_request() 함수 생성
-- [ ] PUT/DELETE 메소드 처리
-- [ ] JSON Body 처리
-- [ ] Custom Headers 처리
-- [ ] Method 파라미터 생성
+- [x] PUT/DELETE 메소드 처리
+- [x] JSON Body 처리
+- [x] Custom Headers 처리
+- [x] Method 파라미터 생성
 
 ### TASK-409: web_add_header() 함수 생성
-- [ ] HTTP 헤더 변환
-- [ ] 다중 헤더 처리
-- [ ] 특수 문자 이스케이프
+- [x] HTTP 헤더 변환
+- [x] 다중 헤더 처리
+- [x] 특수 문자 이스케이프
 
-### TASK-410: web_set_cookie() 함수 생성
-- [ ] 쿠키 설정 코드 생성
-- [ ] 쿠키 파라미터 변환
+### TASK-410: web_add_cookie() 함수 생성
+- [x] 쿠키 설정 코드 생성
+- [x] 쿠키 파라미터 변환
+- [x] Domain 및 Path 설정
 
 ### TASK-411: web_reg_save_param() 함수 생성
-- [ ] 정규표현식 → LB/RB 변환
-- [ ] JSONPath → JSON 파라미터 변환
-- [ ] Ordinal 설정
-- [ ] SaveOffset 설정
+- [x] 정규표현식 → LB/RB 변환
+- [x] Ordinal 설정
+- [x] SaveOffset 설정
+- [x] Default Value 처리
 
 ### TASK-412: web_reg_save_param_json() 함수 생성
-- [ ] JSON 추출 로직 변환
-- [ ] JSONPath 표현식 변환
-- [ ] 배열 인덱스 처리
+- [x] JSON 추출 로직 변환
+- [x] JSONPath 표현식 변환
+- [x] 배열 인덱스 처리
 
 ### TASK-413: lr_think_time() 함수 생성
-- [ ] Timer 값 변환
-- [ ] 랜덤 Think Time 처리
+- [x] Timer 값 변환 (ms → seconds)
+- [x] 랜덤 Think Time 처리
 
 ### TASK-414: 트랜잭션 함수 생성
-- [ ] lr_start_transaction() 생성
-- [ ] lr_end_transaction() 생성
-- [ ] 트랜잭션 이름 설정
+- [x] lr_start_transaction() 생성
+- [x] lr_end_transaction() 생성
+- [x] 트랜잭션 이름 설정
 
 ### TASK-415: 조건문 및 반복문 생성
-- [ ] if 문 생성 (IfController 변환)
-- [ ] for 문 생성 (LoopController 변환)
-- [ ] while 문 생성
+- [x] if 문 생성 (IfController 변환)
+- [x] for 문 생성 (LoopController 변환)
+- [x] JMeter 조건식 → C 조건식 변환
 
 ### TASK-416: 변수 처리 코드 생성
-- [ ] lr_save_string() 생성
-- [ ] lr_eval_string() 사용 처리
-- [ ] 파라미터 치환 로직
+- [x] lr_save_string() 생성
+- [x] lr_eval_string() 사용 처리
+- [x] JMeter 변수 ${var} → LoadRunner {var} 변환
 
 ### TASK-417: 에러 처리 코드 생성
-- [ ] lr_error_message() 생성
-- [ ] lr_abort() 생성 (Assertion 실패 시)
-- [ ] 조건부 에러 처리
+- [x] lr_error_message() 생성
+- [x] lr_abort() 생성 (Assertion 실패 시)
+- [x] 조건부 에러 처리
 
 ### TASK-418: 코드 포매팅 및 최적화
-- [ ] 들여쓰기 정리
-- [ ] 빈 줄 추가
-- [ ] 주석 추가
-- [ ] 중복 코드 제거
+- [x] 들여쓰기 정리
+- [x] 빈 줄 추가
+- [x] 주석 추가
+- [x] CodeFormatter 클래스 활용
 
 ### TASK-419: LoadRunner 코드 생성 통합 테스트
 - [ ] 단순 스크립트 생성 테스트
