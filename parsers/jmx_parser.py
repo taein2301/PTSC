@@ -24,7 +24,8 @@ from utils.constants import (
     JMETER_RESPONSE_ASSERTION,
     JMETER_CONSTANT_TIMER,
     JMETER_TRANSACTION_CONTROLLER,
-    JMETER_IF_CONTROLLER
+    JMETER_IF_CONTROLLER,
+    JMETER_LOOP_CONTROLLER
 )
 
 
@@ -980,6 +981,51 @@ class JMXParser:
 
         return if_controller
 
+    def _parse_loop_controller(self, controller_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse LoopController element for loop iteration.
+
+        Args:
+            controller_elem: LoopController XML element
+
+        Returns:
+            Dictionary containing loop controller information
+
+        Extracts:
+        - Loop count
+        - Continue forever flag
+        """
+        loop_controller: Dict[str, Any] = {
+            'type': 'LoopController',
+            'name': self._get_element_name(controller_elem),
+            'enabled': self._get_element_enabled(controller_elem),
+            'loops': 1,
+            'continue_forever': False,
+            'comments': ''
+        }
+
+        # Extract loop count
+        loops_prop = controller_elem.find(".//stringProp[@name='LoopController.loops']")
+        if loops_prop is not None and loops_prop.text:
+            try:
+                loop_controller['loops'] = int(loops_prop.text)
+            except ValueError:
+                self.warnings.append(f"Invalid loops value: {loops_prop.text}")
+
+        # Extract continue forever
+        continue_forever_prop = controller_elem.find(".//boolProp[@name='LoopController.continue_forever']")
+        if continue_forever_prop is not None and continue_forever_prop.text:
+            loop_controller['continue_forever'] = continue_forever_prop.text.lower() == 'true'
+
+        # Extract comments
+        comments_prop = controller_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            loop_controller['comments'] = comments_prop.text
+
+        self.logger.debug(f"Parsed LoopController: {loop_controller['loops']} iterations")
+
+        return loop_controller
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -1111,6 +1157,12 @@ class JMXParser:
         if element_type == JMETER_IF_CONTROLLER:
             if_controller = self._parse_if_controller(element)
             self.test_plan['elements'].append(if_controller)
+            return
+
+        # Handle Loop Controller specially
+        if element_type == JMETER_LOOP_CONTROLLER:
+            loop_controller = self._parse_loop_controller(element)
+            self.test_plan['elements'].append(loop_controller)
             return
 
         # Store element info
