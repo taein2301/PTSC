@@ -262,57 +262,58 @@
 - [x] Content-Type 파싱
 
 ### TASK-305: HTTP Header Manager 파싱
-- [ ] HeaderManager 엘리먼트 추출
-- [ ] 헤더 키-값 쌍 파싱
-- [ ] 다중 헤더 처리
-- [ ] 헤더 병합 로직
+- [x] HeaderManager 엘리먼트 추출
+- [x] 헤더 키-값 쌍 파싱
+- [x] 다중 헤더 처리
+- [x] 헤더 병합 로직
 
-### TASK-306: Cookie Manager 파싱
-- [ ] CookieManager 엘리먼트 추출
-- [ ] 쿠키 정책 파싱
-- [ ] 쿠키 클리어 설정 파싱
+### TASK-306: Regular Expression Extractor 파싱
+- [x] RegexExtractor 엘리먼트 추출
+- [x] 변수명 파싱
+- [x] 정규표현식 패턴 파싱
+- [x] Template 파싱
+- [x] Match Number 파싱
+- [x] Default Value 파싱
 
-### TASK-307: Assertions 파싱
-- [ ] ResponseAssertion 추출
-- [ ] 응답 코드 검증 규칙 파싱
-- [ ] 응답 본문 검증 규칙 파싱
-- [ ] Duration Assertion 파싱
+### TASK-307: JSON Extractor 파싱
+- [x] JSONPostProcessor 엘리먼트 추출
+- [x] JSONPath 표현식 파싱
+- [x] 변수명 파싱
+- [x] Default Value 파싱
 
-### TASK-308: Timers 파싱
-- [ ] ConstantTimer 추출
-- [ ] UniformRandomTimer 추출
-- [ ] Think Time 계산 로직
+### TASK-308: Response Assertion 파싱
+- [x] ResponseAssertion 추출
+- [x] 응답 코드 검증 규칙 파싱
+- [x] 응답 본문 검증 규칙 파싱
+- [x] Test field 및 Test type 파싱
 
-### TASK-309: Regular Expression Extractor 파싱
-- [ ] RegexExtractor 엘리먼트 추출
-- [ ] 변수명 파싱
-- [ ] 정규표현식 패턴 파싱
-- [ ] Template 파싱
-- [ ] Match Number 파싱
-- [ ] Default Value 파싱
+### TASK-309: Constant Timer 파싱
+- [x] ConstantTimer 추출
+- [x] Delay 시간 파싱
+- [x] Think Time 계산 로직
 
-### TASK-310: JSON Extractor 파싱
-- [ ] JSONPostProcessor 엘리먼트 추출
-- [ ] JSONPath 표현식 파싱
-- [ ] 변수명 파싱
-- [ ] Default Value 파싱
+### TASK-310: Transaction Controller 파싱
+- [x] TransactionController 엘리먼트 추출
+- [x] Transaction 이름 파싱
+- [x] Include timers 플래그 파싱
+- [x] Generate parent sample 플래그 파싱
 
-### TASK-311: 변수 및 파라미터 파싱
-- [ ] ${variable} 형식 변수 추출
-- [ ] __P() 함수 파싱
-- [ ] CSV Data Set Config 파싱
+### TASK-311: If Controller 파싱
+- [x] IfController 엘리먼트 추출
+- [x] Condition 표현식 파싱
+- [x] Evaluate all children 플래그 파싱
+- [x] Use expression 플래그 파싱
 
-### TASK-312: 컨트롤러 파싱
-- [ ] LoopController 파싱
-- [ ] IfController 파싱
-- [ ] WhileController 파싱
-- [ ] TransactionController 파싱
+### TASK-312: Loop Controller 파싱
+- [x] LoopController 엘리먼트 추출
+- [x] Loop count 파싱
+- [x] Continue forever 플래그 파싱
 
-### TASK-313: JMX 파싱 통합 테스트
-- [ ] 단순 JMX 파일 파싱 테스트
-- [ ] 복잡한 JMX 파일 파싱 테스트
-- [ ] 잘못된 JMX 파일 에러 처리 테스트
-- [ ] 대용량 JMX 파일 성능 테스트
+### TASK-313: Cookie Manager 파싱
+- [x] CookieManager 엘리먼트 추출
+- [x] 쿠키 정책 파싱
+- [x] Clear each iteration 설정 파싱
+- [x] Predefined cookies 파싱
 
 ---
 
