@@ -19,7 +19,8 @@ from utils.constants import (
     JMETER_HTTP_SAMPLER,
     JMETER_HTTP_SAMPLER_OLD,
     JMETER_HEADER_MANAGER,
-    JMETER_REGEX_EXTRACTOR
+    JMETER_REGEX_EXTRACTOR,
+    JMETER_JSON_EXTRACTOR
 )
 
 
@@ -690,6 +691,71 @@ class JMXParser:
 
         return regex_extractor
 
+    def _parse_json_extractor(self, extractor_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse JSONExtractor/JSONPostProcessor element for JSON correlation.
+
+        Args:
+            extractor_elem: JSONPostProcessor XML element
+
+        Returns:
+            Dictionary containing JSON extractor information
+
+        Extracts:
+        - Reference name (variable name)
+        - JSON path expression
+        - Match number
+        - Default value
+        """
+        json_extractor: Dict[str, Any] = {
+            'type': 'JSONExtractor',
+            'name': self._get_element_name(extractor_elem),
+            'enabled': self._get_element_enabled(extractor_elem),
+            'refname': '',
+            'jsonpath': '',
+            'match_number': 1,
+            'default': '',
+            'concat_separator': '',
+            'comments': ''
+        }
+
+        # Extract reference name
+        refname_prop = extractor_elem.find(".//stringProp[@name='JSONPostProcessor.referenceNames']")
+        if refname_prop is not None and refname_prop.text:
+            json_extractor['refname'] = refname_prop.text
+
+        # Extract JSON path
+        jsonpath_prop = extractor_elem.find(".//stringProp[@name='JSONPostProcessor.jsonPathExprs']")
+        if jsonpath_prop is not None and jsonpath_prop.text:
+            json_extractor['jsonpath'] = jsonpath_prop.text
+
+        # Extract match number
+        match_number_prop = extractor_elem.find(".//stringProp[@name='JSONPostProcessor.match_numbers']")
+        if match_number_prop is not None and match_number_prop.text:
+            try:
+                json_extractor['match_number'] = int(match_number_prop.text)
+            except ValueError:
+                self.warnings.append(f"Invalid match_number: {match_number_prop.text}")
+
+        # Extract default value
+        default_prop = extractor_elem.find(".//stringProp[@name='JSONPostProcessor.defaultValues']")
+        if default_prop is not None and default_prop.text:
+            json_extractor['default'] = default_prop.text
+
+        # Extract concat separator
+        concat_prop = extractor_elem.find(".//stringProp[@name='JSONPostProcessor.concat_separator']")
+        if concat_prop is not None and concat_prop.text:
+            json_extractor['concat_separator'] = concat_prop.text
+
+        # Extract comments
+        comments_prop = extractor_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            json_extractor['comments'] = comments_prop.text
+
+        self.logger.debug(f"Parsed JSONExtractor: {json_extractor['refname']}")
+
+        return json_extractor
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -791,6 +857,12 @@ class JMXParser:
         if element_type == JMETER_REGEX_EXTRACTOR:
             regex_extractor = self._parse_regex_extractor(element)
             self.test_plan['elements'].append(regex_extractor)
+            return
+
+        # Handle JSON Extractor specially
+        if element_type == JMETER_JSON_EXTRACTOR:
+            json_extractor = self._parse_json_extractor(element)
+            self.test_plan['elements'].append(json_extractor)
             return
 
         # Store element info
