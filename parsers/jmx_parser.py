@@ -20,7 +20,8 @@ from utils.constants import (
     JMETER_HTTP_SAMPLER_OLD,
     JMETER_HEADER_MANAGER,
     JMETER_REGEX_EXTRACTOR,
-    JMETER_JSON_EXTRACTOR
+    JMETER_JSON_EXTRACTOR,
+    JMETER_RESPONSE_ASSERTION
 )
 
 
@@ -756,6 +757,96 @@ class JMXParser:
 
         return json_extractor
 
+    def _parse_response_assertion(self, assertion_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse ResponseAssertion element for response validation.
+
+        Args:
+            assertion_elem: ResponseAssertion XML element
+
+        Returns:
+            Dictionary containing assertion information
+
+        Extracts:
+        - Test field (response text, code, message, etc.)
+        - Test type (contains, matches, equals, etc.)
+        - Test patterns
+        """
+        test_patterns: List[str] = []
+        assertion: Dict[str, Any] = {
+            'type': 'ResponseAssertion',
+            'name': self._get_element_name(assertion_elem),
+            'enabled': self._get_element_enabled(assertion_elem),
+            'test_field': 'response_data',
+            'test_type': 'contains',
+            'assume_success': False,
+            'test_patterns': test_patterns,
+            'comments': ''
+        }
+
+        # Extract test field
+        test_field_prop = assertion_elem.find(".//stringProp[@name='Assertion.test_field']")
+        if test_field_prop is not None and test_field_prop.text:
+            field_value = test_field_prop.text
+            if field_value == 'Assertion.response_data':
+                assertion['test_field'] = 'response_data'
+            elif field_value == 'Assertion.response_code':
+                assertion['test_field'] = 'response_code'
+            elif field_value == 'Assertion.response_message':
+                assertion['test_field'] = 'response_message'
+            elif field_value == 'Assertion.response_headers':
+                assertion['test_field'] = 'response_headers'
+            elif field_value == 'Assertion.request_headers':
+                assertion['test_field'] = 'request_headers'
+            elif field_value == 'Assertion.request_data':
+                assertion['test_field'] = 'request_data'
+
+        # Extract test type
+        test_type_prop = assertion_elem.find(".//intProp[@name='Assertion.test_type']")
+        if test_type_prop is not None and test_type_prop.text:
+            try:
+                test_type_value = int(test_type_prop.text)
+                # JMeter test type mapping
+                if test_type_value == 2:
+                    assertion['test_type'] = 'contains'
+                elif test_type_value == 6:
+                    assertion['test_type'] = 'not_contains'
+                elif test_type_value == 1:
+                    assertion['test_type'] = 'matches'
+                elif test_type_value == 5:
+                    assertion['test_type'] = 'not_matches'
+                elif test_type_value == 8:
+                    assertion['test_type'] = 'equals'
+                elif test_type_value == 12:
+                    assertion['test_type'] = 'not_equals'
+                elif test_type_value == 16:
+                    assertion['test_type'] = 'substring'
+                elif test_type_value == 20:
+                    assertion['test_type'] = 'not_substring'
+            except ValueError:
+                self.warnings.append(f"Invalid test_type: {test_type_prop.text}")
+
+        # Extract assume success
+        assume_success_prop = assertion_elem.find(".//boolProp[@name='Assertion.assume_success']")
+        if assume_success_prop is not None and assume_success_prop.text:
+            assertion['assume_success'] = assume_success_prop.text.lower() == 'true'
+
+        # Extract test patterns
+        collection = assertion_elem.find(".//collectionProp[@name='Asserion.test_strings']")
+        if collection is not None:
+            for pattern_prop in collection.findall(".//stringProp"):
+                if pattern_prop.text:
+                    test_patterns.append(pattern_prop.text)
+
+        # Extract comments
+        comments_prop = assertion_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            assertion['comments'] = comments_prop.text
+
+        self.logger.debug(f"Parsed ResponseAssertion with {len(test_patterns)} patterns")
+
+        return assertion
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -863,6 +954,12 @@ class JMXParser:
         if element_type == JMETER_JSON_EXTRACTOR:
             json_extractor = self._parse_json_extractor(element)
             self.test_plan['elements'].append(json_extractor)
+            return
+
+        # Handle Response Assertion specially
+        if element_type == JMETER_RESPONSE_ASSERTION:
+            assertion = self._parse_response_assertion(element)
+            self.test_plan['elements'].append(assertion)
             return
 
         # Store element info
