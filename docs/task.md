@@ -245,12 +245,12 @@
 - [x] 전역 설정 파싱
 
 ### TASK-303: ThreadGroup 파싱
-- [ ] ThreadGroup 엘리먼트 추출 함수
-- [ ] 스레드 수 파싱
-- [ ] Ramp-up 시간 파싱
-- [ ] Loop Count 파싱
-- [ ] Scheduler 설정 파싱
-- [ ] 중첩된 ThreadGroup 처리
+- [x] ThreadGroup 엘리먼트 추출 함수
+- [x] 스레드 수 파싱
+- [x] Ramp-up 시간 파싱
+- [x] Loop Count 파싱
+- [x] Scheduler 설정 파싱
+- [x] 중첩된 ThreadGroup 처리
 
 ### TASK-304: HTTP Sampler 파싱
 - [ ] HTTPSamplerProxy 추출 함수
