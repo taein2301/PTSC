@@ -21,7 +21,8 @@ from utils.constants import (
     JMETER_HEADER_MANAGER,
     JMETER_REGEX_EXTRACTOR,
     JMETER_JSON_EXTRACTOR,
-    JMETER_RESPONSE_ASSERTION
+    JMETER_RESPONSE_ASSERTION,
+    JMETER_CONSTANT_TIMER
 )
 
 
@@ -847,6 +848,44 @@ class JMXParser:
 
         return assertion
 
+    def _parse_constant_timer(self, timer_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse ConstantTimer element for think time/delay.
+
+        Args:
+            timer_elem: ConstantTimer XML element
+
+        Returns:
+            Dictionary containing timer information
+
+        Extracts:
+        - Delay time in milliseconds
+        """
+        timer: Dict[str, Any] = {
+            'type': 'ConstantTimer',
+            'name': self._get_element_name(timer_elem),
+            'enabled': self._get_element_enabled(timer_elem),
+            'delay': 0,
+            'comments': ''
+        }
+
+        # Extract delay
+        delay_prop = timer_elem.find(".//stringProp[@name='ConstantTimer.delay']")
+        if delay_prop is not None and delay_prop.text:
+            try:
+                timer['delay'] = int(delay_prop.text)
+            except ValueError:
+                self.warnings.append(f"Invalid delay value: {delay_prop.text}")
+
+        # Extract comments
+        comments_prop = timer_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            timer['comments'] = comments_prop.text
+
+        self.logger.debug(f"Parsed ConstantTimer: {timer['delay']}ms")
+
+        return timer
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -960,6 +999,12 @@ class JMXParser:
         if element_type == JMETER_RESPONSE_ASSERTION:
             assertion = self._parse_response_assertion(element)
             self.test_plan['elements'].append(assertion)
+            return
+
+        # Handle Constant Timer specially
+        if element_type == JMETER_CONSTANT_TIMER:
+            timer = self._parse_constant_timer(element)
+            self.test_plan['elements'].append(timer)
             return
 
         # Store element info
