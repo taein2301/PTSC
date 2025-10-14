@@ -23,7 +23,8 @@ from utils.constants import (
     JMETER_JSON_EXTRACTOR,
     JMETER_RESPONSE_ASSERTION,
     JMETER_CONSTANT_TIMER,
-    JMETER_TRANSACTION_CONTROLLER
+    JMETER_TRANSACTION_CONTROLLER,
+    JMETER_IF_CONTROLLER
 )
 
 
@@ -930,6 +931,55 @@ class JMXParser:
 
         return transaction
 
+    def _parse_if_controller(self, controller_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse IfController element for conditional execution.
+
+        Args:
+            controller_elem: IfController XML element
+
+        Returns:
+            Dictionary containing if controller information
+
+        Extracts:
+        - Condition expression
+        - Evaluate for all children flag
+        - Use expression flag
+        """
+        if_controller: Dict[str, Any] = {
+            'type': 'IfController',
+            'name': self._get_element_name(controller_elem),
+            'enabled': self._get_element_enabled(controller_elem),
+            'condition': '',
+            'evaluate_all': False,
+            'use_expression': True,
+            'comments': ''
+        }
+
+        # Extract condition
+        condition_prop = controller_elem.find(".//stringProp[@name='IfController.condition']")
+        if condition_prop is not None and condition_prop.text:
+            if_controller['condition'] = condition_prop.text
+
+        # Extract evaluate all children
+        evaluate_all_prop = controller_elem.find(".//boolProp[@name='IfController.evaluateAll']")
+        if evaluate_all_prop is not None and evaluate_all_prop.text:
+            if_controller['evaluate_all'] = evaluate_all_prop.text.lower() == 'true'
+
+        # Extract use expression
+        use_expression_prop = controller_elem.find(".//boolProp[@name='IfController.useExpression']")
+        if use_expression_prop is not None and use_expression_prop.text:
+            if_controller['use_expression'] = use_expression_prop.text.lower() == 'true'
+
+        # Extract comments
+        comments_prop = controller_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            if_controller['comments'] = comments_prop.text
+
+        self.logger.debug(f"Parsed IfController: {if_controller['condition']}")
+
+        return if_controller
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -1055,6 +1105,12 @@ class JMXParser:
         if element_type == JMETER_TRANSACTION_CONTROLLER:
             transaction = self._parse_transaction_controller(element)
             self.test_plan['elements'].append(transaction)
+            return
+
+        # Handle If Controller specially
+        if element_type == JMETER_IF_CONTROLLER:
+            if_controller = self._parse_if_controller(element)
+            self.test_plan['elements'].append(if_controller)
             return
 
         # Store element info
