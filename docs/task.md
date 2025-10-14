@@ -253,13 +253,13 @@
 - [x] 중첩된 ThreadGroup 처리
 
 ### TASK-304: HTTP Sampler 파싱
-- [ ] HTTPSamplerProxy 추출 함수
-- [ ] HTTP 메소드 파싱 (GET, POST, PUT, DELETE)
-- [ ] 도메인 및 포트 파싱
-- [ ] 경로(Path) 파싱
-- [ ] Query Parameters 파싱
-- [ ] Body Data 파싱
-- [ ] Content-Type 파싱
+- [x] HTTPSamplerProxy 추출 함수
+- [x] HTTP 메소드 파싱 (GET, POST, PUT, DELETE)
+- [x] 도메인 및 포트 파싱
+- [x] 경로(Path) 파싱
+- [x] Query Parameters 파싱
+- [x] Body Data 파싱
+- [x] Content-Type 파싱
 
 ### TASK-305: HTTP Header Manager 파싱
 - [ ] HeaderManager 엘리먼트 추출
