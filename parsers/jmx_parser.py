@@ -17,7 +17,8 @@ from utils.constants import (
     JMETER_USER_DEFINED_VARIABLES,
     JMETER_THREAD_GROUP,
     JMETER_HTTP_SAMPLER,
-    JMETER_HTTP_SAMPLER_OLD
+    JMETER_HTTP_SAMPLER_OLD,
+    JMETER_HEADER_MANAGER
 )
 
 
@@ -558,6 +559,53 @@ class JMXParser:
                         if value_prop is not None and value_prop.text:
                             sampler['body'] = value_prop.text
 
+    def _parse_header_manager(self, header_elem: ET.Element) -> Dict[str, Any]:
+        """
+        Parse HeaderManager element and extract HTTP headers.
+
+        Args:
+            header_elem: HeaderManager XML element
+
+        Returns:
+            Dictionary containing header manager information
+
+        Extracts:
+        - Header name-value pairs
+        - Multiple headers support
+        """
+        headers_list: List[Dict[str, str]] = []
+        header_manager: Dict[str, Any] = {
+            'type': 'HeaderManager',
+            'name': self._get_element_name(header_elem),
+            'enabled': self._get_element_enabled(header_elem),
+            'headers': headers_list,
+            'comments': ''
+        }
+
+        # Extract comments
+        comments_prop = header_elem.find(".//stringProp[@name='TestElement.comments']")
+        if comments_prop is not None and comments_prop.text:
+            header_manager['comments'] = comments_prop.text
+
+        # Find collection of headers
+        collection = header_elem.find(".//collectionProp[@name='HeaderManager.headers']")
+        if collection is not None:
+            # Extract each header
+            for header_prop in collection.findall(".//elementProp"):
+                name_prop = header_prop.find(".//stringProp[@name='Header.name']")
+                value_prop = header_prop.find(".//stringProp[@name='Header.value']")
+
+                if name_prop is not None:
+                    header: Dict[str, str] = {
+                        'name': name_prop.text or '',
+                        'value': value_prop.text or '' if value_prop is not None else ''
+                    }
+                    headers_list.append(header)
+
+        self.logger.debug(f"Parsed HeaderManager with {len(headers_list)} headers")
+
+        return header_manager
+
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
         Parse hashTree elements recursively.
@@ -647,6 +695,12 @@ class JMXParser:
         if element_type in [JMETER_HTTP_SAMPLER, JMETER_HTTP_SAMPLER_OLD]:
             sampler = self._parse_http_sampler(element)
             self.test_plan['elements'].append(sampler)
+            return
+
+        # Handle Header Manager specially
+        if element_type == JMETER_HEADER_MANAGER:
+            header_manager = self._parse_header_manager(element)
+            self.test_plan['elements'].append(header_manager)
             return
 
         # Store element info
