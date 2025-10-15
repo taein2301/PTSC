@@ -8,6 +8,7 @@ This application provides bidirectional conversion between:
 """
 
 import streamlit as st
+import os
 from converters.jmeter_to_lr import JMeterToLRConverter
 from converters.lr_to_jmeter import LRToJMeterConverter
 from utils.validators import FileValidator
@@ -69,6 +70,8 @@ if 'jmx_conversion_log' not in st.session_state:
     st.session_state.jmx_conversion_log = "Ready to convert..."
 if 'jmx_output_filename' not in st.session_state:
     st.session_state.jmx_output_filename = None
+if 'jmx_sample_file' not in st.session_state:
+    st.session_state.jmx_sample_file = None
 
 if 'lr_converted_content' not in st.session_state:
     st.session_state.lr_converted_content = None
@@ -76,27 +79,69 @@ if 'lr_conversion_log' not in st.session_state:
     st.session_state.lr_conversion_log = "Ready to convert..."
 if 'lr_output_filename' not in st.session_state:
     st.session_state.lr_output_filename = None
+if 'lr_sample_file' not in st.session_state:
+    st.session_state.lr_sample_file = None
 
 
-def convert_jmx_to_lr(uploaded_file):
+# Sample file configurations
+SAMPLE_JMX_FILES = {
+    "Simple GET Request": "samples/01_simple_get.jmx",
+    "POST with Parameters": "samples/02_post_with_params.jmx",
+    "Request with Headers": "samples/03_with_headers.jmx",
+    "Regex Extractor (Correlation)": "samples/04_with_regex_extractor.jmx",
+    "JSON Extractor": "samples/05_with_json_extractor.jmx",
+}
+
+SAMPLE_LR_FILES = {
+    "Simple GET Request": "samples/01_simple_get.c",
+    "POST with Parameters": "samples/02_post_with_params.c",
+    "Request with Headers": "samples/03_with_headers.c",
+    "Correlation Example": "samples/04_with_correlation.c",
+    "Transaction with Think Time": "samples/05_with_transaction.c",
+}
+
+
+def load_sample_file(file_path):
+    """Load a sample file from the samples directory"""
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        return None
+    except Exception as e:
+        st.error(f"Error loading sample file: {e}")
+        return None
+
+
+def convert_jmx_to_lr(uploaded_file=None, content_str=None, filename=None):
     """
     Convert JMeter JMX file to LoadRunner C script
 
     Args:
-        uploaded_file: Streamlit UploadedFile object
+        uploaded_file: Streamlit UploadedFile object (optional)
+        content_str: File content as string (optional)
+        filename: Filename for output generation (optional)
 
     Returns:
         Tuple of (success, output_content, log_message)
     """
     try:
-        # Read file content
-        file_content = uploaded_file.read()
-        file_size = len(file_content)
+        # Handle uploaded file or direct content
+        if uploaded_file:
+            file_content = uploaded_file.read()
+            file_size = len(file_content)
+            file_name = uploaded_file.name
+        elif content_str:
+            file_content = content_str.encode('utf-8')
+            file_size = len(file_content)
+            file_name = filename or "sample.jmx"
+        else:
+            return False, None, "No input provided"
 
         # Validate file
         validator = FileValidator()
         is_valid, error_msg = validator.validate_jmx_file(
-            uploaded_file.name,
+            file_name,
             file_content,
             file_size
         )
@@ -106,11 +151,11 @@ def convert_jmx_to_lr(uploaded_file):
 
         # Decode content
         encoding = validator.detect_encoding(file_content)
-        content_str = file_content.decode(encoding)
+        content_string = file_content.decode(encoding)
 
         # Perform conversion
         converter = JMeterToLRConverter()
-        success, output_content, stats = converter.execute_conversion(content_str)
+        success, output_content, stats = converter.execute_conversion(content_string)
 
         # Generate log message
         if success:
@@ -118,7 +163,7 @@ def convert_jmx_to_lr(uploaded_file):
             log_msg = f"Conversion Successful!\n\n{summary}"
 
             # Generate output filename
-            output_filename = FileHelper.generate_output_filename(uploaded_file.name, '.c')
+            output_filename = FileHelper.generate_output_filename(file_name, '.c')
             st.session_state.jmx_output_filename = output_filename
 
             return True, output_content, log_msg
@@ -131,25 +176,35 @@ def convert_jmx_to_lr(uploaded_file):
         return False, None, f"Unexpected Error:\n{str(e)}"
 
 
-def convert_lr_to_jmx(uploaded_file):
+def convert_lr_to_jmx(uploaded_file=None, content_str=None, filename=None):
     """
     Convert LoadRunner C script to JMeter JMX file
 
     Args:
-        uploaded_file: Streamlit UploadedFile object
+        uploaded_file: Streamlit UploadedFile object (optional)
+        content_str: File content as string (optional)
+        filename: Filename for output generation (optional)
 
     Returns:
         Tuple of (success, output_content, log_message)
     """
     try:
-        # Read file content
-        file_content = uploaded_file.read()
-        file_size = len(file_content)
+        # Handle uploaded file or direct content
+        if uploaded_file:
+            file_content = uploaded_file.read()
+            file_size = len(file_content)
+            file_name = uploaded_file.name
+        elif content_str:
+            file_content = content_str.encode('utf-8')
+            file_size = len(file_content)
+            file_name = filename or "sample.c"
+        else:
+            return False, None, "No input provided"
 
         # Validate file
         validator = FileValidator()
         is_valid, error_msg = validator.validate_c_file(
-            uploaded_file.name,
+            file_name,
             file_content,
             file_size
         )
@@ -159,11 +214,11 @@ def convert_lr_to_jmx(uploaded_file):
 
         # Decode content
         encoding = validator.detect_encoding(file_content)
-        content_str = file_content.decode(encoding)
+        content_string = file_content.decode(encoding)
 
         # Perform conversion
         converter = LRToJMeterConverter()
-        success, output_content, stats = converter.execute_conversion(content_str)
+        success, output_content, stats = converter.execute_conversion(content_string)
 
         # Generate log message
         if success:
@@ -171,7 +226,7 @@ def convert_lr_to_jmx(uploaded_file):
             log_msg = f"Conversion Successful!\n\n{summary}"
 
             # Generate output filename
-            output_filename = FileHelper.generate_output_filename(uploaded_file.name, '.jmx')
+            output_filename = FileHelper.generate_output_filename(file_name, '.jmx')
             st.session_state.lr_output_filename = output_filename
 
             return True, output_content, log_msg
@@ -255,26 +310,61 @@ def main():
                 st.success(f"✅ File uploaded: {uploaded_file.name}")
                 st.text(f"Size: {uploaded_file.size / 1024:.2f} KB")
 
+            # Sample file selector
+            st.markdown("---")
+            st.markdown("#### 📂 Or Load Sample File")
+            sample_choice = st.selectbox(
+                "Choose a sample JMX file",
+                options=["Select a sample..."] + list(SAMPLE_JMX_FILES.keys()),
+                key="jmx_sample_selector"
+            )
+
+            load_sample_btn = st.button("📥 Load Sample", key="load_jmx_sample")
+            if load_sample_btn and sample_choice != "Select a sample...":
+                sample_path = SAMPLE_JMX_FILES[sample_choice]
+                sample_content = load_sample_file(sample_path)
+                if sample_content:
+                    st.session_state.jmx_sample_file = {
+                        'name': os.path.basename(sample_path),
+                        'content': sample_content
+                    }
+                    st.success(f"✅ Sample loaded: {sample_choice}")
+                    st.rerun()
+
         with col2:
             st.markdown("#### 📊 Conversion Status")
-            if uploaded_file:
+            has_input = uploaded_file or st.session_state.jmx_sample_file
+            if has_input:
                 if st.session_state.jmx_converted_content:
                     st.success("✅ Conversion completed!")
                 else:
                     st.warning("⏳ Ready to convert. Click 'Convert' button below.")
             else:
-                st.info("💡 Please upload a JMX file to begin")
+                st.info("💡 Please upload a JMX file or load a sample to begin")
+
+            # Show sample file info if loaded
+            if st.session_state.jmx_sample_file and not uploaded_file:
+                st.info(f"📄 Sample: {st.session_state.jmx_sample_file['name']}")
 
         # Action buttons
         st.markdown("---")
         button_col1, button_col2, button_col3 = st.columns(3)
 
         with button_col1:
-            convert_btn = st.button("🔄 Convert", key="convert_jmx", disabled=not uploaded_file)
-            if convert_btn and uploaded_file:
+            has_input = uploaded_file or st.session_state.jmx_sample_file
+            convert_btn = st.button("🔄 Convert", key="convert_jmx", disabled=not has_input)
+            if convert_btn and has_input:
                 with st.spinner("Converting..."):
-                    uploaded_file.seek(0)  # Reset file pointer
-                    success, output, log_msg = convert_jmx_to_lr(uploaded_file)
+                    if uploaded_file:
+                        uploaded_file.seek(0)  # Reset file pointer
+                        success, output, log_msg = convert_jmx_to_lr(uploaded_file=uploaded_file)
+                    else:
+                        # Use sample file
+                        sample_data = st.session_state.jmx_sample_file
+                        success, output, log_msg = convert_jmx_to_lr(
+                            content_str=sample_data['content'],
+                            filename=sample_data['name']
+                        )
 
                     st.session_state.jmx_converted_content = output if success else None
                     st.session_state.jmx_conversion_log = log_msg
@@ -301,10 +391,12 @@ def main():
                 st.session_state.jmx_converted_content = None
                 st.session_state.jmx_conversion_log = "Ready to convert..."
                 st.session_state.jmx_output_filename = None
+                st.session_state.jmx_sample_file = None
                 st.rerun()
 
         # Preview section
-        if uploaded_file:
+        has_input = uploaded_file or st.session_state.jmx_sample_file
+        if has_input:
             st.markdown("---")
             st.markdown("### 👁️ Code Preview")
 
@@ -313,8 +405,12 @@ def main():
             with preview_col1:
                 st.markdown("**Original JMX:**")
                 try:
-                    uploaded_file.seek(0)
-                    content = uploaded_file.read().decode('utf-8')
+                    if uploaded_file:
+                        uploaded_file.seek(0)
+                        content = uploaded_file.read().decode('utf-8')
+                    else:
+                        content = st.session_state.jmx_sample_file['content']
+
                     formatter = CodeFormatter()
                     truncated = formatter.truncate_code(content, max_lines=30)
                     st.code(truncated, language='xml', line_numbers=True)
@@ -361,26 +457,61 @@ def main():
                 st.success(f"✅ File uploaded: {uploaded_file_lr.name}")
                 st.text(f"Size: {uploaded_file_lr.size / 1024:.2f} KB")
 
+            # Sample file selector
+            st.markdown("---")
+            st.markdown("#### 📂 Or Load Sample File")
+            sample_choice_lr = st.selectbox(
+                "Choose a sample C file",
+                options=["Select a sample..."] + list(SAMPLE_LR_FILES.keys()),
+                key="lr_sample_selector"
+            )
+
+            load_sample_btn_lr = st.button("📥 Load Sample", key="load_lr_sample")
+            if load_sample_btn_lr and sample_choice_lr != "Select a sample...":
+                sample_path_lr = SAMPLE_LR_FILES[sample_choice_lr]
+                sample_content_lr = load_sample_file(sample_path_lr)
+                if sample_content_lr:
+                    st.session_state.lr_sample_file = {
+                        'name': os.path.basename(sample_path_lr),
+                        'content': sample_content_lr
+                    }
+                    st.success(f"✅ Sample loaded: {sample_choice_lr}")
+                    st.rerun()
+
         with col2:
             st.markdown("#### 📊 Conversion Status")
-            if uploaded_file_lr:
+            has_input_lr = uploaded_file_lr or st.session_state.lr_sample_file
+            if has_input_lr:
                 if st.session_state.lr_converted_content:
                     st.success("✅ Conversion completed!")
                 else:
                     st.warning("⏳ Ready to convert. Click 'Convert' button below.")
             else:
-                st.info("💡 Please upload a C file to begin")
+                st.info("💡 Please upload a C file or load a sample to begin")
+
+            # Show sample file info if loaded
+            if st.session_state.lr_sample_file and not uploaded_file_lr:
+                st.info(f"📄 Sample: {st.session_state.lr_sample_file['name']}")
 
         # Action buttons
         st.markdown("---")
         button_col1, button_col2, button_col3 = st.columns(3)
 
         with button_col1:
-            convert_btn_lr = st.button("🔄 Convert", key="convert_lr", disabled=not uploaded_file_lr)
-            if convert_btn_lr and uploaded_file_lr:
+            has_input_lr = uploaded_file_lr or st.session_state.lr_sample_file
+            convert_btn_lr = st.button("🔄 Convert", key="convert_lr", disabled=not has_input_lr)
+            if convert_btn_lr and has_input_lr:
                 with st.spinner("Converting..."):
-                    uploaded_file_lr.seek(0)  # Reset file pointer
-                    success, output, log_msg = convert_lr_to_jmx(uploaded_file_lr)
+                    if uploaded_file_lr:
+                        uploaded_file_lr.seek(0)  # Reset file pointer
+                        success, output, log_msg = convert_lr_to_jmx(uploaded_file=uploaded_file_lr)
+                    else:
+                        # Use sample file
+                        sample_data_lr = st.session_state.lr_sample_file
+                        success, output, log_msg = convert_lr_to_jmx(
+                            content_str=sample_data_lr['content'],
+                            filename=sample_data_lr['name']
+                        )
 
                     st.session_state.lr_converted_content = output if success else None
                     st.session_state.lr_conversion_log = log_msg
@@ -407,10 +538,12 @@ def main():
                 st.session_state.lr_converted_content = None
                 st.session_state.lr_conversion_log = "Ready to convert..."
                 st.session_state.lr_output_filename = None
+                st.session_state.lr_sample_file = None
                 st.rerun()
 
         # Preview section
-        if uploaded_file_lr:
+        has_input_lr = uploaded_file_lr or st.session_state.lr_sample_file
+        if has_input_lr:
             st.markdown("---")
             st.markdown("### 👁️ Code Preview")
 
@@ -419,8 +552,12 @@ def main():
             with preview_col1:
                 st.markdown("**Original LoadRunner C:**")
                 try:
-                    uploaded_file_lr.seek(0)
-                    content = uploaded_file_lr.read().decode('utf-8')
+                    if uploaded_file_lr:
+                        uploaded_file_lr.seek(0)
+                        content = uploaded_file_lr.read().decode('utf-8')
+                    else:
+                        content = st.session_state.lr_sample_file['content']
+
                     formatter = CodeFormatter()
                     truncated = formatter.truncate_code(content, max_lines=30)
                     st.code(truncated, language='c', line_numbers=True)
