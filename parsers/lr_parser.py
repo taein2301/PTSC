@@ -49,6 +49,8 @@ class LRParser:
             transactions = self._parse_transactions(action_code)
             think_times = self._parse_think_times(action_code)
             correlations = self._parse_correlations(action_code)
+            headers = self._parse_headers(action_code)
+            control_flows = self._parse_control_flow(action_code)
 
             return {
                 'success': True,
@@ -59,7 +61,9 @@ class LRParser:
                 'http_requests': http_requests,
                 'transactions': transactions,
                 'think_times': think_times,
-                'correlations': correlations
+                'correlations': correlations,
+                'headers': headers,
+                'control_flows': control_flows
             }
 
         except Exception as e:
@@ -467,3 +471,74 @@ class LRParser:
             'param_name': param_name,
             'json_path': json_path
         }
+
+    def _parse_headers(self, code: str) -> List[Dict[str, str]]:
+        """
+        Parse web_add_header function calls
+
+        Args:
+            code: Function code
+
+        Returns:
+            List of header dictionaries
+        """
+        headers = []
+
+        # Pattern for web_add_header
+        pattern = r'web_add_header\s*\(\s*"([^"]*)"\s*\)'
+        for match in re.finditer(pattern, code):
+            header_line = match.group(1)
+
+            # Split header into name and value
+            if ':' in header_line:
+                parts = header_line.split(':', 1)
+                header_name = parts[0].strip()
+                header_value = parts[1].strip()
+
+                headers.append({
+                    'name': header_name,
+                    'value': header_value
+                })
+
+        return headers
+
+    def _parse_control_flow(self, code: str) -> List[Dict[str, Any]]:
+        """
+        Parse control flow structures (if, for, while)
+
+        Args:
+            code: Function code
+
+        Returns:
+            List of control flow dictionaries
+        """
+        control_flows = []
+
+        # Pattern for if statements
+        if_pattern = r'if\s*\((.*?)\)\s*\{'
+        for match in re.finditer(if_pattern, code):
+            condition = match.group(1)
+            control_flows.append({
+                'type': 'if',
+                'condition': condition.strip()
+            })
+
+        # Pattern for for loops
+        for_pattern = r'for\s*\((.*?)\)\s*\{'
+        for match in re.finditer(for_pattern, code):
+            loop_def = match.group(1)
+            control_flows.append({
+                'type': 'for',
+                'definition': loop_def.strip()
+            })
+
+        # Pattern for while loops
+        while_pattern = r'while\s*\((.*?)\)\s*\{'
+        for match in re.finditer(while_pattern, code):
+            condition = match.group(1)
+            control_flows.append({
+                'type': 'while',
+                'condition': condition.strip()
+            })
+
+        return control_flows
