@@ -82,6 +82,14 @@ if 'lr_output_filename' not in st.session_state:
 if 'lr_sample_file' not in st.session_state:
     st.session_state.lr_sample_file = None
 
+# Conversion settings (for future enhancements)
+if 'indent_size' not in st.session_state:
+    st.session_state.indent_size = 4
+if 'include_comments' not in st.session_state:
+    st.session_state.include_comments = True
+if 'error_handling_level' not in st.session_state:
+    st.session_state.error_handling_level = 'Standard'
+
 
 # Sample file configurations
 SAMPLE_JMX_FILES = {
@@ -248,13 +256,40 @@ def main():
 
     # Version info in sidebar
     with st.sidebar:
+        st.markdown("### ⚙️ Conversion Settings")
+        with st.expander("Code Formatting", expanded=False):
+            st.session_state.indent_size = st.select_slider(
+                "Indentation Size",
+                options=[2, 4, 8],
+                value=st.session_state.indent_size,
+                help="Number of spaces for indentation (currently informational)"
+            )
+
+            st.session_state.include_comments = st.checkbox(
+                "Include Descriptive Comments",
+                value=st.session_state.include_comments,
+                help="Add explanatory comments in generated code (currently informational)"
+            )
+
+        with st.expander("Error Handling", expanded=False):
+            st.session_state.error_handling_level = st.selectbox(
+                "Error Handling Level",
+                options=['Minimal', 'Standard', 'Verbose'],
+                index=['Minimal', 'Standard', 'Verbose'].index(st.session_state.error_handling_level),
+                help="Level of error handling in converted scripts (currently informational)"
+            )
+
+        st.info("💡 **Note:** Settings are ready for future implementation. Current conversions use default values.")
+
+        st.markdown("---")
         st.markdown("### ℹ️ About")
         st.info("""
-        **Version:** 0.2.0
+        **Version:** 0.2.1
 
         **Features:**
         - JMeter → LoadRunner conversion
         - LoadRunner → JMeter conversion
+        - Sample file loading
         - Code preview with syntax highlighting
         - Conversion logs and statistics
         - File validation
