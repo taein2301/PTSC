@@ -871,35 +871,24 @@
 
 ## Phase 11: 고급 기능 및 최적화
 
-### TASK-1101: 샘플 파일 제공
-- [ ] 샘플 JMX 파일 5개 작성
-- [ ] 샘플 LoadRunner 스크립트 5개 작성
-- [ ] "Load Sample" 버튼 추가
-- [ ] 샘플 파일 다운로드 기능
+### TASK-1101: 샘플 파일 제공 ✅
+
+- [x] 샘플 JMX 파일 5개 작성 (기존 10개 활용)
+- [x] 샘플 LoadRunner 스크립트 5개 작성
+- [x] "Load Sample" 버튼 추가 (각 탭에 샘플 선택 드롭다운 포함)
+- [x] 샘플 파일 다운로드 기능 (변환 후 다운로드 버튼 활용)
 
 ### TASK-1102: 변환 옵션 설정
+
 - [ ] 설정 패널 추가 (Sidebar 활용)
 - [ ] 코드 포매팅 옵션 (들여쓰기 크기)
 - [ ] 주석 포함 여부 옵션
 - [ ] 에러 처리 수준 옵션
 
-### TASK-1103: 변환 히스토리
-- [ ] 세션 내 변환 이력 저장
-- [ ] 이력 목록 표시
-- [ ] 이전 변환 결과 다시 보기
-
 ### TASK-1104: 비교 기능
 - [ ] Diff 뷰 추가 (선택사항)
 - [ ] 변환 전후 비교
 - [ ] 변경 사항 하이라이트
-
-### TASK-1105: 다크 모드 지원
-- [ ] 다크 모드 테마 설정
-- [ ] 색상 스키마 전환 버튼
-
-### TASK-1106: 다국어 지원 (선택사항)
-- [ ] 한국어/영어 전환 기능
-- [ ] UI 텍스트 다국어 처리
 
 ### TASK-1107: 성능 최적화
 - [ ] 대용량 파일 처리 개선
@@ -922,10 +911,6 @@
 - [ ] JMXGenerator 단위 테스트
 - [ ] Validators 단위 테스트
 - [ ] Formatters 단위 테스트
-- [ ] 가상환경에서 pytest 실행
-  ```bash
-  pytest tests/
-  ```
 
 ### TASK-1202: 통합 테스트 작성
 - [ ] JMeterToLRConverter 통합 테스트
@@ -954,10 +939,6 @@
 - [ ] 변환된 LoadRunner 스크립트를 LoadRunner에서 실행
 - [ ] 변환된 JMeter 스크립트를 JMeter에서 실행
 - [ ] 실행 결과 비교 및 검증
-
-### TASK-1207: 회귀 테스트
-- [ ] 기능 추가 후 기존 기능 테스트
-- [ ] 버그 수정 후 전체 테스트 수행
 
 ### TASK-1208: 코드 커버리지 확인
 - [ ] pytest-cov를 사용한 커버리지 측정
@@ -1005,50 +986,6 @@
 - [ ] 모든 클래스에 docstring 추가
 - [ ] 모든 함수에 docstring 추가
 - [ ] 복잡한 로직에 인라인 주석 추가
-
----
-
-## Phase 14: 배포 및 출시
-
-### TASK-1401: 배포 환경 설정
-- [ ] Streamlit Cloud 계정 생성
-- [ ] 또는 Docker 이미지 생성
-- [ ] 환경 변수 설정
-- [ ] requirements.txt 최종 확인
-
-### TASK-1402: CI/CD 파이프라인 구축
-- [ ] GitHub Actions 설정
-- [ ] 자동 테스트 실행 (가상환경 생성 포함)
-- [ ] 자동 배포 설정
-
-### TASK-1403: Docker 컨테이너화 (선택사항)
-- [ ] Dockerfile 작성 (가상환경 설정 포함)
-  ```dockerfile
-  FROM python:3.9-slim
-  WORKDIR /app
-  COPY requirements.txt .
-  RUN python -m venv .venv
-  RUN .venv/bin/pip install --no-cache-dir -r requirements.txt
-  COPY . .
-  CMD [".venv/bin/streamlit", "run", "app.py"]
-  ```
-- [ ] docker-compose.yml 작성
-- [ ] 이미지 빌드 및 테스트
-
-### TASK-1404: 버전 관리
-- [ ] 시맨틱 버저닝 적용
-- [ ] Git 태그 생성
-- [ ] 릴리스 브랜치 관리
-
-### TASK-1405: 베타 테스트
-- [ ] 베타 테스터 모집
-- [ ] 피드백 수집
-- [ ] 버그 수정 및 개선
-
-### TASK-1406: 정식 출시
-- [ ] 프로덕션 배포
-- [ ] 출시 공지
-- [ ] 사용자 지원 채널 오픈
 
 ---
 
