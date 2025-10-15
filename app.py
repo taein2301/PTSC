@@ -100,6 +100,10 @@ if 'lr_show_full_original' not in st.session_state:
 if 'lr_show_full_converted' not in st.session_state:
     st.session_state.lr_show_full_converted = False
 
+# Conversion history
+if 'conversion_history' not in st.session_state:
+    st.session_state.conversion_history = []
+
 
 # Sample file configurations
 SAMPLE_JMX_FILES = {
@@ -129,6 +133,22 @@ def load_sample_file(file_path):
     except Exception as e:
         st.error(f"Error loading sample file: {e}")
         return None
+
+
+def add_to_history(direction, filename, success, message):
+    """Add conversion attempt to history"""
+    import datetime
+    history_entry = {
+        'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'direction': direction,
+        'filename': filename,
+        'success': success,
+        'message': message[:200]  # Truncate long messages
+    }
+    st.session_state.conversion_history.insert(0, history_entry)
+    # Keep only last 50 entries
+    if len(st.session_state.conversion_history) > 50:
+        st.session_state.conversion_history = st.session_state.conversion_history[:50]
 
 
 def convert_jmx_to_lr(uploaded_file=None, content_str=None, filename=None):
