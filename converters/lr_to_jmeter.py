@@ -37,10 +37,11 @@ class LRToJMeterConverter(BaseConverter):
         # Check for basic LoadRunner structure
         has_includes = '#include' in content
         has_vuser_functions = any(func in content for func in
-                                  [LR_FUNCTIONS['VUSER_INIT'], LR_FUNCTIONS['ACTION'], LR_FUNCTIONS['VUSER_END']])
+                                  [LR_FUNCTIONS['VUSER_INIT'], LR_FUNCTIONS['ACTION'],
+                                   LR_FUNCTIONS['VUSER_END']])
         has_web_functions = any(func in content for func in
-                               [LR_FUNCTIONS['WEB_URL'], LR_FUNCTIONS['WEB_SUBMIT_DATA'],
-                                LR_FUNCTIONS['WEB_CUSTOM_REQUEST']])
+                                [LR_FUNCTIONS['WEB_URL'], LR_FUNCTIONS['WEB_SUBMIT_DATA'],
+                                 LR_FUNCTIONS['WEB_CUSTOM_REQUEST']])
 
         if not (has_includes or has_vuser_functions or has_web_functions):
             return False, f"{ERROR_CODES['INVALID_C_SYNTAX']}: Content does not appear to be a LoadRunner script"
@@ -130,7 +131,7 @@ class LRToJMeterConverter(BaseConverter):
 
         # Count total items
         total_items = (len(http_requests) + len(variables) + len(correlations) +
-                      len(think_times) + len(transactions))
+                       len(think_times) + len(transactions))
 
         self.increment_stat('items_total', total_items)
 
@@ -177,7 +178,6 @@ class LRToJMeterConverter(BaseConverter):
         self.add_warning("Runtime settings from LoadRunner need to be configured in JMeter test plan")
 
         # Check for custom functions or advanced features
-        vuser_init = parse_result.get('vuser_init', '')
         action = parse_result.get('action', '')
 
         if 'lr_eval_string' in action:
