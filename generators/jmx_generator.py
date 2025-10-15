@@ -5,9 +5,10 @@ Generates valid JMeter JMX files from parsed LoadRunner data.
 Creates proper XML structure with TestPlan, ThreadGroups, HTTPSamplers, etc.
 """
 
+import re
 import xml.etree.ElementTree as ET
 import xml.dom.minidom as minidom
-from typing import Dict, List, Any
+from typing import Dict, Any
 from utils.helpers import StringHelper
 from utils.constants import JMETER_ELEMENTS
 
@@ -160,6 +161,18 @@ class JMXGenerator:
         correlations = parsed_data.get('correlations', [])
         think_times = parsed_data.get('think_times', [])
         transactions = parsed_data.get('transactions', [])
+        headers = parsed_data.get('headers', [])
+
+        # Add HeaderManager if headers exist
+        if headers:
+            header_manager = self._create_header_manager(headers)
+            hashtree.append(header_manager)
+            ET.SubElement(hashtree, 'hashTree')
+
+        # Add CookieManager
+        cookie_manager = self._create_cookie_manager()
+        hashtree.append(cookie_manager)
+        ET.SubElement(hashtree, 'hashTree')
 
         # Track transaction state
         in_transaction = False
@@ -489,6 +502,51 @@ class JMXGenerator:
         self._add_string_prop(elem_prop, 'Argument.value', arg_value)
         self._add_string_prop(elem_prop, 'Argument.metadata', '=')
 
+    def _create_header_manager(self, headers: list) -> ET.Element:
+        """
+        Create HeaderManager element
 
-# Import re module for regex operations
-import re
+        Args:
+            headers: List of header dictionaries with 'name' and 'value'
+
+        Returns:
+            HeaderManager XML element
+        """
+        header_manager = ET.Element(JMETER_ELEMENTS['HEADER_MANAGER'], {
+            'guiclass': 'HeaderPanel',
+            'testclass': JMETER_ELEMENTS['HEADER_MANAGER'],
+            'testname': 'HTTP Header Manager',
+            'enabled': 'true'
+        })
+
+        coll_prop = ET.SubElement(header_manager, 'collectionProp', {'name': 'HeaderManager.headers'})
+
+        for header in headers:
+            header_elem = ET.SubElement(coll_prop, 'elementProp', {
+                'name': '',
+                'elementType': 'Header'
+            })
+
+            self._add_string_prop(header_elem, 'Header.name', header.get('name', ''))
+            self._add_string_prop(header_elem, 'Header.value', header.get('value', ''))
+
+        return header_manager
+
+    def _create_cookie_manager(self) -> ET.Element:
+        """
+        Create CookieManager element
+
+        Returns:
+            CookieManager XML element
+        """
+        cookie_manager = ET.Element(JMETER_ELEMENTS['COOKIE_MANAGER'], {
+            'guiclass': 'CookiePanel',
+            'testclass': JMETER_ELEMENTS['COOKIE_MANAGER'],
+            'testname': 'HTTP Cookie Manager',
+            'enabled': 'true'
+        })
+
+        self._add_bool_prop(cookie_manager, 'CookieManager.clearEachIteration', False)
+        ET.SubElement(cookie_manager, 'collectionProp', {'name': 'CookieManager.cookies'})
+
+        return cookie_manager
