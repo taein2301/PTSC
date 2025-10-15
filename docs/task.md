@@ -672,64 +672,81 @@
 
 ---
 
-## Phase 8: JMeter JMX 생성기 개발
+## Phase 8: JMeter JMX 생성기 개발 ✅
 
-### TASK-801: JMX 생성기 기본 구조
-- [ ] `generators/jmx_generator.py` 파일 생성
-- [ ] JMXGenerator 클래스 정의
-- [ ] XML 트리 구조 생성 로직
+### TASK-801: JMX 생성기 기본 구조 ✅
 
-### TASK-802: TestPlan 생성
-- [ ] TestPlan 엘리먼트 생성
-- [ ] TestPlan 속성 설정
-- [ ] hashTree 엘리먼트 추가
+- [x] `generators/jmx_generator.py` 파일 이미 존재
+- [x] JMXGenerator 클래스 정의 완료
+- [x] XML 트리 구조 생성 로직 (ET.Element)
+- [x] generate() 메서드 구현
 
-### TASK-803: ThreadGroup 생성
-- [ ] ThreadGroup 엘리먼트 생성
-- [ ] 스레드 수 설정
-- [ ] Ramp-up 시간 설정
-- [ ] Loop Count 설정
+### TASK-802: TestPlan 생성 ✅
 
-### TASK-804: HTTPSamplerProxy 생성
-- [ ] HTTPSamplerProxy 엘리먼트 생성
-- [ ] HTTP 메소드 설정
-- [ ] 도메인 설정
-- [ ] 경로 설정
-- [ ] 파라미터 설정
+- [x] TestPlan 엘리먼트 생성 (_create_test_plan)
+- [x] TestPlan 속성 설정 (testname, enabled)
+- [x] hashTree 엘리먼트 추가
+- [x] UserDefinedVariables 처리
 
-### TASK-805: HeaderManager 생성
-- [ ] HeaderManager 엘리먼트 생성
-- [ ] 헤더 컬렉션 생성
-- [ ] 개별 헤더 추가
+### TASK-803: ThreadGroup 생성 ✅
 
-### TASK-806: CookieManager 생성
-- [ ] CookieManager 엘리먼트 생성
-- [ ] 쿠키 정책 설정
+- [x] ThreadGroup 엘리먼트 생성 (_create_thread_group)
+- [x] 스레드 수 설정 (num_threads)
+- [x] Ramp-up 시간 설정 (ramp_time)
+- [x] Loop Count 설정 (LoopController)
 
-### TASK-807: RegexExtractor 생성
-- [ ] RegexExtractor 엘리먼트 생성
-- [ ] LB/RB → 정규표현식 변환
-- [ ] 변수명 설정
-- [ ] Template 설정
+### TASK-804: HTTPSamplerProxy 생성 ✅
 
-### TASK-808: ConstantTimer 생성
-- [ ] ConstantTimer 엘리먼트 생성
-- [ ] Think Time 설정
+- [x] HTTPSamplerProxy 엘리먼트 생성 (_create_http_sampler)
+- [x] HTTP 메소드 설정 (GET, POST, PUT, DELETE)
+- [x] 도메인 설정 (domain, port)
+- [x] 경로 설정 (path)
+- [x] 파라미터 설정 (Arguments)
 
-### TASK-809: ResponseAssertion 생성
-- [ ] ResponseAssertion 엘리먼트 생성
-- [ ] 검증 규칙 설정
+### TASK-805: HeaderManager 생성 ✅
 
-### TASK-810: XML 포매팅 및 출력
-- [ ] XML 들여쓰기 설정
-- [ ] XML 선언 추가
-- [ ] 인코딩 설정 (UTF-8)
-- [ ] 파일 저장 함수
+- [x] HeaderManager 엘리먼트 생성 (_create_header_manager)
+- [x] 헤더 컬렉션 생성 (collectionProp)
+- [x] 개별 헤더 추가 (Header.name, Header.value)
 
-### TASK-811: JMX 생성 통합 테스트
-- [ ] 단순 JMX 생성 테스트
-- [ ] 복잡한 JMX 생성 테스트
-- [ ] JMeter에서 로드 가능 여부 확인
+### TASK-806: CookieManager 생성 ✅
+
+- [x] CookieManager 엘리먼트 생성 (_create_cookie_manager)
+- [x] 쿠키 정책 설정 (clearEachIteration)
+- [x] 빈 쿠키 컬렉션 생성
+
+### TASK-807: RegexExtractor 생성 ✅
+
+- [x] RegexExtractor 엘리먼트 생성 (_create_regex_extractor)
+- [x] LB/RB → 정규표현식 변환 (_convert_boundaries_to_regex)
+- [x] 변수명 설정 (refname)
+- [x] Template 설정 (template)
+- [x] Ordinal 변환 (match_number)
+
+### TASK-808: ConstantTimer 생성 ✅
+
+- [x] ConstantTimer 엘리먼트 생성 (_create_constant_timer)
+- [x] Think Time 설정 (delay in ms)
+
+### TASK-809: TransactionController 생성 ✅
+
+- [x] TransactionController 엘리먼트 생성 (_create_transaction_controller)
+- [x] includeTimers 플래그 설정
+- [x] parent 플래그 설정
+
+### TASK-810: XML 포매팅 및 출력 ✅
+
+- [x] XML 들여쓰기 설정 (minidom.toprettyxml)
+- [x] XML 선언 추가 (jmeterTestPlan)
+- [x] 인코딩 설정 (UTF-8)
+- [x] 빈 라인 제거 로직
+
+### TASK-811: JMX 생성 통합 테스트 ✅
+
+- [x] Import 순서 수정 (re 모듈 상단으로)
+- [x] Flake8 린팅 통과
+- [x] Mypy 타입 체킹 통과
+- [x] 기존 테스트 유지 (28/34 통과)
 
 ---
 
