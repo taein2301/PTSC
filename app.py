@@ -90,6 +90,16 @@ if 'include_comments' not in st.session_state:
 if 'error_handling_level' not in st.session_state:
     st.session_state.error_handling_level = 'Standard'
 
+# Preview settings
+if 'jmx_show_full_original' not in st.session_state:
+    st.session_state.jmx_show_full_original = False
+if 'jmx_show_full_converted' not in st.session_state:
+    st.session_state.jmx_show_full_converted = False
+if 'lr_show_full_original' not in st.session_state:
+    st.session_state.lr_show_full_original = False
+if 'lr_show_full_converted' not in st.session_state:
+    st.session_state.lr_show_full_converted = False
+
 
 # Sample file configurations
 SAMPLE_JMX_FILES = {
@@ -427,6 +437,8 @@ def main():
                 st.session_state.jmx_conversion_log = "Ready to convert..."
                 st.session_state.jmx_output_filename = None
                 st.session_state.jmx_sample_file = None
+                st.session_state.jmx_show_full_original = False
+                st.session_state.jmx_show_full_converted = False
                 st.rerun()
 
         # Preview section
@@ -447,8 +459,23 @@ def main():
                         content = st.session_state.jmx_sample_file['content']
 
                     formatter = CodeFormatter()
-                    truncated = formatter.truncate_code(content, max_lines=30)
-                    st.code(truncated, language='xml', line_numbers=True)
+                    if st.session_state.jmx_show_full_original:
+                        st.code(content, language='xml', line_numbers=True)
+                    else:
+                        truncated = formatter.truncate_code(content, max_lines=30)
+                        st.code(truncated, language='xml', line_numbers=True)
+
+                    # Show More/Less button
+                    total_lines = len(content.split('\n'))
+                    if total_lines > 30:
+                        if st.session_state.jmx_show_full_original:
+                            if st.button("📄 Show Less", key="show_less_jmx_original"):
+                                st.session_state.jmx_show_full_original = False
+                                st.rerun()
+                        else:
+                            if st.button(f"📄 Show More ({total_lines} lines)", key="show_more_jmx_original"):
+                                st.session_state.jmx_show_full_original = True
+                                st.rerun()
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
 
@@ -456,8 +483,23 @@ def main():
                 st.markdown("**Converted LoadRunner C:**")
                 if st.session_state.jmx_converted_content:
                     formatter = CodeFormatter()
-                    truncated = formatter.truncate_code(st.session_state.jmx_converted_content, max_lines=30)
-                    st.code(truncated, language='c', line_numbers=True)
+                    if st.session_state.jmx_show_full_converted:
+                        st.code(st.session_state.jmx_converted_content, language='c', line_numbers=True)
+                    else:
+                        truncated = formatter.truncate_code(st.session_state.jmx_converted_content, max_lines=30)
+                        st.code(truncated, language='c', line_numbers=True)
+
+                    # Show More/Less button
+                    total_lines = len(st.session_state.jmx_converted_content.split('\n'))
+                    if total_lines > 30:
+                        if st.session_state.jmx_show_full_converted:
+                            if st.button("📄 Show Less", key="show_less_jmx_converted"):
+                                st.session_state.jmx_show_full_converted = False
+                                st.rerun()
+                        else:
+                            if st.button(f"📄 Show More ({total_lines} lines)", key="show_more_jmx_converted"):
+                                st.session_state.jmx_show_full_converted = True
+                                st.rerun()
                 else:
                     st.code("// Conversion result will appear here\n// Click 'Convert' button to start", language='c')
 
@@ -574,6 +616,8 @@ def main():
                 st.session_state.lr_conversion_log = "Ready to convert..."
                 st.session_state.lr_output_filename = None
                 st.session_state.lr_sample_file = None
+                st.session_state.lr_show_full_original = False
+                st.session_state.lr_show_full_converted = False
                 st.rerun()
 
         # Preview section
@@ -594,8 +638,23 @@ def main():
                         content = st.session_state.lr_sample_file['content']
 
                     formatter = CodeFormatter()
-                    truncated = formatter.truncate_code(content, max_lines=30)
-                    st.code(truncated, language='c', line_numbers=True)
+                    if st.session_state.lr_show_full_original:
+                        st.code(content, language='c', line_numbers=True)
+                    else:
+                        truncated = formatter.truncate_code(content, max_lines=30)
+                        st.code(truncated, language='c', line_numbers=True)
+
+                    # Show More/Less button
+                    total_lines = len(content.split('\n'))
+                    if total_lines > 30:
+                        if st.session_state.lr_show_full_original:
+                            if st.button("📄 Show Less", key="show_less_lr_original"):
+                                st.session_state.lr_show_full_original = False
+                                st.rerun()
+                        else:
+                            if st.button(f"📄 Show More ({total_lines} lines)", key="show_more_lr_original"):
+                                st.session_state.lr_show_full_original = True
+                                st.rerun()
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
 
@@ -603,10 +662,25 @@ def main():
                 st.markdown("**Converted JMX:**")
                 if st.session_state.lr_converted_content:
                     formatter = CodeFormatter()
-                    truncated = formatter.truncate_code(
-                        st.session_state.lr_converted_content, max_lines=30
-                    )
-                    st.code(truncated, language='xml', line_numbers=True)
+                    if st.session_state.lr_show_full_converted:
+                        st.code(st.session_state.lr_converted_content, language='xml', line_numbers=True)
+                    else:
+                        truncated = formatter.truncate_code(
+                            st.session_state.lr_converted_content, max_lines=30
+                        )
+                        st.code(truncated, language='xml', line_numbers=True)
+
+                    # Show More/Less button
+                    total_lines = len(st.session_state.lr_converted_content.split('\n'))
+                    if total_lines > 30:
+                        if st.session_state.lr_show_full_converted:
+                            if st.button("📄 Show Less", key="show_less_lr_converted"):
+                                st.session_state.lr_show_full_converted = False
+                                st.rerun()
+                        else:
+                            if st.button(f"📄 Show More ({total_lines} lines)", key="show_more_lr_converted"):
+                                st.session_state.lr_show_full_converted = True
+                                st.rerun()
                 else:
                     st.code(
                         "<!-- Conversion result will appear here -->\n"
