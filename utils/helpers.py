@@ -606,3 +606,141 @@ def ensure_directory_exists(file_path: str) -> bool:
         return True
     except Exception:
         return False
+
+
+class FileHelper:
+    """
+    File helper class that wraps file-related utility functions.
+
+    This class provides static methods for file operations used by the Streamlit app.
+    """
+
+    @staticmethod
+    def generate_output_filename(input_filename: str, extension: str) -> str:
+        """
+        Generate output filename based on input filename.
+
+        Args:
+            input_filename: Original filename
+            extension: Target file extension (e.g., '.c', '.jmx')
+
+        Returns:
+            Generated output filename
+
+        Example:
+            >>> FileHelper.generate_output_filename("test.jmx", ".c")
+            'test_converted.c'
+        """
+        # Get base name without extension
+        base_name = os.path.splitext(input_filename)[0]
+
+        # Generate filename
+        output_name = f"{base_name}_converted{extension}"
+
+        return output_name
+
+    @staticmethod
+    def read_file(file_path: str, encoding: Optional[str] = None) -> Tuple[bool, str, str]:
+        """
+        Read a file with automatic encoding detection.
+
+        Args:
+            file_path: Path to the file
+            encoding: Optional encoding
+
+        Returns:
+            Tuple of (success, content, error_message)
+        """
+        return read_file(file_path, encoding)
+
+    @staticmethod
+    def write_file(file_path: str, content: str, encoding: str = 'utf-8') -> Tuple[bool, str]:
+        """
+        Write content to a file.
+
+        Args:
+            file_path: Path to the file
+            content: Content to write
+            encoding: Encoding to use
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        return write_file(file_path, content, encoding)
+
+    @staticmethod
+    def sanitize_filename(filename: str) -> str:
+        """
+        Sanitize a filename by removing invalid characters.
+
+        Args:
+            filename: Original filename
+
+        Returns:
+            Sanitized filename
+        """
+        return sanitize_filename(filename)
+
+    @staticmethod
+    def format_file_size(size_bytes: int) -> str:
+        """
+        Format file size in human-readable format.
+
+        Args:
+            size_bytes: Size in bytes
+
+        Returns:
+            Formatted size string
+        """
+        return format_file_size(size_bytes)
+
+
+class LogHelper:
+    """
+    Logging helper class for formatting log messages.
+
+    This class provides static methods for creating consistent log messages.
+    """
+
+    @staticmethod
+    def format_error(error_type: str, details: str, line_number: Optional[int] = None) -> str:
+        """
+        Format an error message.
+
+        Args:
+            error_type: Type of error
+            details: Error details
+            line_number: Optional line number
+
+        Returns:
+            Formatted error message
+        """
+        return format_error_message(error_type, details, line_number)
+
+    @staticmethod
+    def format_warning(warning_type: str, details: str) -> str:
+        """
+        Format a warning message.
+
+        Args:
+            warning_type: Type of warning
+            details: Warning details
+
+        Returns:
+            Formatted warning message
+        """
+        return format_warning_message(warning_type, details)
+
+    @staticmethod
+    def format_success(operation: str, details: str = "") -> str:
+        """
+        Format a success message.
+
+        Args:
+            operation: Operation that succeeded
+            details: Optional details
+
+        Returns:
+            Formatted success message
+        """
+        return format_success_message(operation, details)

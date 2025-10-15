@@ -9,7 +9,7 @@ from typing import Tuple, Optional, Dict, Any
 from converters.base_converter import BaseConverter
 from parsers.jmx_parser import JMXParser
 from generators.lr_generator import LRGenerator
-from utils.constants import ERROR_CODES, JMETER_ELEMENTS
+from utils.constants import ERROR_CODES
 
 
 class JMeterToLRConverter(BaseConverter):

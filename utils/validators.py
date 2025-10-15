@@ -298,3 +298,110 @@ def validate_file(filename: str, content: str, file_type: str) -> Tuple[bool, st
         return False, error
 
     return True, ""
+
+
+class FileValidator:
+    """
+    File validator class that wraps validation functions for use in the Streamlit app.
+
+    This class provides a convenient interface for validating uploaded files
+    including JMeter JMX files and LoadRunner C scripts.
+    """
+
+    def __init__(self):
+        """Initialize the FileValidator"""
+        pass
+
+    def validate_jmx_file(self, filename: str, file_content: bytes, file_size: int) -> Tuple[bool, str]:
+        """
+        Validate a JMeter JMX file.
+
+        Args:
+            filename: Name of the uploaded file
+            file_content: File content as bytes
+            file_size: Size of the file in bytes
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        # Validate extension
+        is_valid, error = validate_file_extension(filename, 'jmx')
+        if not is_valid:
+            return False, error
+
+        # Validate size
+        is_valid, error = validate_file_size(file_size)
+        if not is_valid:
+            return False, error
+
+        # Decode and validate content
+        try:
+            encoding = detect_encoding(file_content)
+            content_str = file_content.decode(encoding)
+        except Exception as e:
+            return False, f"Error decoding file: {str(e)}"
+
+        # Validate JMX format
+        is_valid, error = validate_jmx_format(content_str)
+        if not is_valid:
+            return False, error
+
+        # Check for malicious patterns
+        is_safe, warning = check_malicious_patterns(content_str)
+        if not is_safe:
+            return False, warning
+
+        return True, ""
+
+    def validate_c_file(self, filename: str, file_content: bytes, file_size: int) -> Tuple[bool, str]:
+        """
+        Validate a LoadRunner C script file.
+
+        Args:
+            filename: Name of the uploaded file
+            file_content: File content as bytes
+            file_size: Size of the file in bytes
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        # Validate extension
+        is_valid, error = validate_file_extension(filename, 'c')
+        if not is_valid:
+            return False, error
+
+        # Validate size
+        is_valid, error = validate_file_size(file_size)
+        if not is_valid:
+            return False, error
+
+        # Decode and validate content
+        try:
+            encoding = detect_encoding(file_content)
+            content_str = file_content.decode(encoding)
+        except Exception as e:
+            return False, f"Error decoding file: {str(e)}"
+
+        # Validate C file syntax
+        is_valid, error = validate_c_file_syntax(content_str)
+        if not is_valid:
+            return False, error
+
+        # Check for malicious patterns
+        is_safe, warning = check_malicious_patterns(content_str)
+        if not is_safe:
+            return False, warning
+
+        return True, ""
+
+    def detect_encoding(self, file_bytes: bytes) -> str:
+        """
+        Detect the encoding of a file.
+
+        Args:
+            file_bytes: Raw bytes of the file
+
+        Returns:
+            Detected encoding name
+        """
+        return detect_encoding(file_bytes)

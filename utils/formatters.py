@@ -74,6 +74,36 @@ class CodeFormatter:
         """
         return format_xml_code(xml_string, indent_size)
 
+    def truncate_code(self, code: str, max_lines: int = 30) -> str:
+        """
+        Truncate code to a maximum number of lines for preview.
+
+        Args:
+            code: Code to truncate
+            max_lines: Maximum number of lines to show
+
+        Returns:
+            Truncated code with ellipsis if truncated
+
+        Example:
+            >>> formatter = CodeFormatter()
+            >>> long_code = "\\n".join([f"line {i}" for i in range(100)])
+            >>> truncated = formatter.truncate_code(long_code, max_lines=20)
+        """
+        if not code:
+            return ""
+
+        lines = code.split('\n')
+
+        if len(lines) <= max_lines:
+            return code
+
+        # Truncate and add ellipsis
+        truncated_lines = lines[:max_lines]
+        truncated_lines.append(f"... ({len(lines) - max_lines} more lines)")
+
+        return '\n'.join(truncated_lines)
+
 
 def format_c_code(code: str, indent_size: int = 4) -> str:
     """

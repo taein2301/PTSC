@@ -8,12 +8,11 @@ This application provides bidirectional conversion between:
 """
 
 import streamlit as st
-import io
 from converters.jmeter_to_lr import JMeterToLRConverter
 from converters.lr_to_jmeter import LRToJMeterConverter
 from utils.validators import FileValidator
 from utils.formatters import CodeFormatter
-from utils.helpers import FileHelper, LogHelper
+from utils.helpers import FileHelper
 
 # Page configuration
 st.set_page_config(
@@ -432,10 +431,16 @@ def main():
                 st.markdown("**Converted JMX:**")
                 if st.session_state.lr_converted_content:
                     formatter = CodeFormatter()
-                    truncated = formatter.truncate_code(st.session_state.lr_converted_content, max_lines=30)
+                    truncated = formatter.truncate_code(
+                        st.session_state.lr_converted_content, max_lines=30
+                    )
                     st.code(truncated, language='xml', line_numbers=True)
                 else:
-                    st.code("<!-- Conversion result will appear here -->\n<!-- Click 'Convert' button to start -->", language='xml')
+                    st.code(
+                        "<!-- Conversion result will appear here -->\n"
+                        "<!-- Click 'Convert' button to start -->",
+                        language='xml'
+                    )
 
         # Conversion log section
         st.markdown("---")

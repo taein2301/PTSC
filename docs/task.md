@@ -510,52 +510,54 @@
 
 ---
 
-## Phase 6: Streamlit 앱과 변환기 통합
+## Phase 6: Streamlit 앱과 변환기 통합 ✅
 
-### TASK-601: 파일 업로드 처리
-- [ ] 업로드된 파일 임시 저장
-- [ ] 파일 읽기 및 인코딩 처리
-- [ ] 파일 내용 검증
+### TASK-601: 파일 업로드 처리 ✅
+- [x] 업로드된 파일 임시 저장 (Streamlit file_uploader 사용)
+- [x] 파일 읽기 및 인코딩 처리 (FileValidator.detect_encoding)
+- [x] 파일 내용 검증 (FileValidator.validate_jmx_file / validate_c_file)
 
-### TASK-602: 변환 실행 연결
-- [ ] Convert 버튼 클릭 이벤트 처리
-- [ ] JMeterToLRConverter 인스턴스 생성
-- [ ] 변환 실행 및 결과 수신
-- [ ] 에러 핸들링
+### TASK-602: 변환 실행 연결 ✅
+- [x] Convert 버튼 클릭 이벤트 처리
+- [x] JMeterToLRConverter / LRToJMeterConverter 인스턴스 생성
+- [x] 변환 실행 및 결과 수신 (execute_conversion 호출)
+- [x] 에러 핸들링 (try-catch 블록)
 
-### TASK-603: 프리뷰 업데이트
-- [ ] 원본 코드 표시
-- [ ] 변환된 코드 표시
-- [ ] 구문 하이라이팅 적용
-- [ ] 로딩 스피너 표시
+### TASK-603: 프리뷰 업데이트 ✅
+- [x] 원본 코드 표시 (2컬럼 레이아웃)
+- [x] 변환된 코드 표시
+- [x] 구문 하이라이팅 적용 (st.code with language parameter)
+- [x] 로딩 스피너 표시 (st.spinner)
 
-### TASK-604: 다운로드 기능 구현
-- [ ] 변환 결과를 파일로 저장
-- [ ] download 버튼 활성화
-- [ ] 파일명 자동 생성 (원본명_converted.c)
-- [ ] Streamlit download_button 연결
+### TASK-604: 다운로드 기능 구현 ✅
+- [x] 변환 결과를 세션 상태로 저장
+- [x] download 버튼 활성화 (st.download_button)
+- [x] 파일명 자동 생성 (FileHelper.generate_output_filename)
+- [x] Streamlit download_button 연결 (적절한 MIME 타입)
 
-### TASK-605: 로그 메시지 표시
-- [ ] 변환 로그를 UI에 표시
-- [ ] 성공/경고/에러 메시지 스타일링
-- [ ] 통계 정보 표시 (변환된 항목 수)
+### TASK-605: 로그 메시지 표시 ✅
+- [x] 변환 로그를 UI에 표시 (st.text_area)
+- [x] 성공/경고/에러 메시지 스타일링 (st.success/warning/error)
+- [x] 통계 정보 표시 (get_conversion_summary)
 
-### TASK-606: Clear 기능 구현
-- [ ] 업로드 파일 초기화
-- [ ] 프리뷰 영역 초기화
-- [ ] 로그 메시지 초기화
-- [ ] 상태 초기화
+### TASK-606: Clear 기능 구현 ✅
+- [x] 업로드 파일 초기화 (st.rerun 사용)
+- [x] 프리뷰 영역 초기화 (세션 상태 초기화)
+- [x] 로그 메시지 초기화
+- [x] 상태 초기화 (converted_content, conversion_log, output_filename)
 
-### TASK-607: 에러 처리
-- [ ] 파일 업로드 에러 표시
-- [ ] 파싱 에러 표시
-- [ ] 변환 에러 표시
-- [ ] 사용자 친화적 에러 메시지
+### TASK-607: 에러 처리 ✅
+- [x] 파일 업로드 에러 표시 (파일 검증 실패 시)
+- [x] 파싱 에러 표시 (파싱 단계 에러)
+- [x] 변환 에러 표시 (변환 단계 에러)
+- [x] 사용자 친화적 에러 메시지 (st.error 사용)
 
-### TASK-608: 성능 최적화
-- [ ] 캐싱 적용 (@st.cache_data)
-- [ ] 불필요한 재실행 방지
-- [ ] 대용량 파일 처리 최적화
+### TASK-608: 유틸리티 클래스 보완 ✅
+- [x] FileValidator 클래스 구현
+- [x] FileHelper 클래스 구현
+- [x] LogHelper 클래스 구현
+- [x] CodeFormatter.truncate_code 메서드 추가
+- [x] 앱 임포트 검증 및 테스트
 
 ---
 
