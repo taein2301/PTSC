@@ -4,221 +4,229 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Performance Test Script Converter (PTSC) is a Streamlit-based web application for bidirectional conversion between JMeter JMX files and LoadRunner C scripts. The primary focus is JMeter → LoadRunner conversion, with LoadRunner → JMeter as secondary priority.
+Performance Test Script Converter (PTSC) - Streamlit web app for bidirectional conversion between JMeter JMX and LoadRunner C scripts. Primary: JMeter→LoadRunner (95%+ accuracy), Secondary: LoadRunner→JMeter.
 
-**Tech Stack:**
-- Python 3.9+
-- Streamlit (web GUI framework)
-- lxml + xml.etree.ElementTree (XML parsing)
-- Target accuracy: 95%+ conversion rate
+**Stack:** Python 3.9+, Streamlit, lxml/xml.etree.ElementTree
 
-## Project Structure
+## Development Commands
 
-```
-performance-script-converter/
-├── app.py                      # Streamlit main application
-├── requirements.txt            # Python dependencies
-├── converters/
-│   ├── base_converter.py      # Abstract base class for converters
-│   ├── jmeter_to_lr.py        # JMeter → LoadRunner converter
-│   └── lr_to_jmeter.py        # LoadRunner → JMeter converter
-├── parsers/
-│   ├── jmx_parser.py          # JMX file parser
-│   └── lr_parser.py           # LoadRunner C script parser
-├── generators/
-│   ├── lr_generator.py        # LoadRunner C code generator
-│   └── jmx_generator.py       # JMX file generator
-├── utils/
-│   ├── validators.py          # File validation utilities
-│   ├── formatters.py          # Code formatting utilities
-│   ├── helpers.py             # Common helper functions
-│   └── constants.py           # Project constants
-├── tests/                      # Unit and integration tests
-└── samples/                    # Sample conversion files
-```
+### Environment Setup (Windows)
 
-## Development Setup
-
-### Virtual Environment (.venv)
-
-This project uses Python virtual environments. Always activate the virtual environment before development:
-
-**Windows:**
 ```bash
+# Activate virtual environment (REQUIRED before any development)
 .venv\Scripts\activate
-```
 
-**Mac/Linux:**
-```bash
-source .venv/bin/activate
-```
-
-### Install Dependencies
-
-```bash
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Run Application
+### Running the Application
 
 ```bash
+# Start Streamlit app (opens browser at http://localhost:8501)
 streamlit run app.py
 ```
 
-### Run Tests
+### Testing
 
 ```bash
 # Run all tests
 pytest tests/
 
-# Run with coverage
+# Run specific test file
+pytest tests/test_jmx_parser.py
+
+# Run with coverage report
 pytest --cov=. --cov-report=html tests/
+
+# Run single test
+pytest tests/test_jmx_parser.py::TestJMXParser::test_parse_http_sampler
 ```
 
-## Architecture
+### Code Quality
 
-### Conversion Pipeline
+```bash
+# Format code
+python -m black app.py converters/ parsers/ generators/ utils/
 
-**JMeter → LoadRunner:**
-1. Validate input JMX file
-2. Parse JMX using `JMXParser` (extract TestPlan, ThreadGroups, Samplers, etc.)
-3. Convert parsed data using `JMeterToLRConverter`
-4. Generate LoadRunner C code using `LRGenerator`
-5. Return formatted C script
+# Lint code
+python -m flake8 app.py converters/ parsers/ generators/ utils/
 
-**LoadRunner → JMeter:**
-1. Validate input C file
-2. Parse LoadRunner script using `LRParser` (extract functions, parameters)
-3. Convert parsed data using `LRToJMeterConverter`
-4. Generate JMX using `JMXGenerator`
-5. Return formatted JMX file
+# Type checking
+python -m mypy utils/comparator.py --ignore-missing-imports
+```
 
-### Key Conversion Mappings
+## Architecture: 3-Stage Conversion Pipeline
 
-**JMeter → LoadRunner:**
-- HTTPSamplerProxy (GET) → `web_url()`
-- HTTPSamplerProxy (POST) → `web_submit_data()`
-- HTTPSamplerProxy (PUT/DELETE) → `web_custom_request()`
-- ThreadGroup → `vuser_init()` / `Action()` / `vuser_end()` structure
-- HeaderManager → `web_add_header()`
-- RegexExtractor → `web_reg_save_param()` with LB/RB
-- JSONExtractor → `web_reg_save_param_json()`
-- ConstantTimer → `lr_think_time()`
-- ResponseAssertion → conditional `lr_error_message()` + `lr_abort()`
-- Variables `${var}` → `lr_eval_string("{var}")`
+All converters inherit from `BaseConverter` and follow this pattern:
 
-**LoadRunner → JMeter:**
-- `web_url()` → HTTPSamplerProxy (GET)
-- `web_submit_data()` → HTTPSamplerProxy (POST)
-- `web_custom_request()` → HTTPSamplerProxy (method-specific)
-- `web_add_header()` → HeaderManager
-- `web_reg_save_param()` → RegexExtractor (LB/RB → regex pattern)
-- `lr_think_time()` → ConstantTimer
-- `lr_start/end_transaction()` → TransactionController
-- vuser_init/Action/vuser_end → ThreadGroups
+### Stage 1: Validate (`validate_input()`)
 
-## Core Classes
+- Check file format (XML structure for JMX, C syntax for LoadRunner)
+- Verify required elements exist
+- Return (is_valid: bool, error_message: Optional[str])
 
-### BaseConverter (abstract)
-Base class defining the conversion interface:
-- `validate_input()` - validates input file format
-- `convert()` - performs conversion logic
-- `generate_output()` - generates output file
+### Stage 2: Convert (`convert()`)
 
-### JMXParser
-Parses JMeter JMX files and extracts:
-- TestPlan elements and global variables
-- ThreadGroup configurations (threads, ramp-up, loops)
-- HTTP Samplers (method, domain, path, parameters, body)
-- Headers, cookies, assertions, timers
-- Correlation extractors (regex, JSON)
-- Controllers (Loop, If, While, Transaction)
+- **Parse** source into intermediate dict structure
+- **Transform** data (reorganize, map elements)
+- **Track** stats (items_total, items_converted, items_skipped)
+- Return dict with {success, data, errors, warnings}
 
-### LRGenerator
-Generates LoadRunner C code with:
-- Proper script structure (includes, vuser functions)
-- HTTP request functions (web_url, web_submit_data, web_custom_request)
-- Correlation functions (web_reg_save_param)
-- Transaction management
-- Think time and error handling
-- Proper indentation and formatting
+### Stage 3: Generate (`generate_output()`)
 
-### LRParser
-Parses LoadRunner C scripts to extract:
-- Function boundaries (vuser_init, Action, vuser_end)
-- HTTP function calls and parameters
-- Transaction markers
-- Variable declarations and usage
-- Control flow structures
+- Generate target format from intermediate structure
+- Return formatted string (C script or XML)
 
-### JMXGenerator
-Generates valid JMX files with:
-- Proper XML structure and namespaces
-- TestPlan and ThreadGroup elements
-- HTTPSamplerProxy configurations
-- Header/Cookie managers
-- Extractors and assertions
-- UTF-8 encoding
+**Entry Point:** `execute_conversion(content: str)` orchestrates all stages.
 
-## Important Implementation Notes
+## Key Architecture Details
 
-### JMX Parsing
-- Handle nested hashTree elements correctly - JMeter uses hashTree for hierarchy
-- ThreadGroup settings include: num_threads, ramp_time, loops, scheduler settings
-- HTTPSamplerProxy parameters are stored as stringProp/boolProp elements
-- Variable references use `${varname}` format
-- Support both raw body (postBodyRaw) and argument-based body data
+### Intermediate Data Structure
 
-### LoadRunner Code Generation
-- All web functions must end with `LAST` parameter
-- Use proper C string escaping for quotes and special characters
-- web_reg_save_param must be placed BEFORE the request it applies to
-- Transaction names should be meaningful and match JMeter transaction controllers
-- Include comments for settings that cannot be scripted (e.g., Runtime Settings for thread count)
+Converters transform source formats into this shared structure:
+
+```python
+{
+  'test_plan': {
+    'name': str,
+    'version': str,
+    # TestPlan metadata
+  },
+  'thread_groups': [{
+    'name': str,
+    'num_threads': int,
+    'ramp_time': int,
+    'loops': int,
+    'samplers': [...],      # HTTP requests
+    'headers': [...],       # Header managers
+    'extractors': [...],    # Regex/JSON extractors
+    'timers': [...],        # Think times
+    'assertions': [...],    # Response validations
+    'controllers': [...],   # Transaction/Loop/If controllers
+    'cookies': [...]        # Cookie managers
+  }],
+  'variables': {           # User-defined variables
+    'var_name': 'value'
+  }
+}
+```
+
+### Component Responsibilities
+
+**Parsers** (parsers/): Parse source format → intermediate dict
+
+- `JMXParser`: Parse JMX XML using ElementTree, handle nested hashTree elements
+- `LRParser`: Parse C code, extract function calls and parameters
+
+**Converters** (converters/): Orchestrate pipeline, track metrics
+
+- `JMeterToLRConverter`: Calls JMXParser → reorganizes data → LRGenerator
+- `LRToJMeterConverter`: Calls LRParser → transforms → JMXGenerator
+- Both inherit from `BaseConverter` (defines 3-stage interface)
+
+**Generators** (generators/): Generate target format from intermediate dict
+
+- `LRGenerator`: Create LoadRunner C code (web_url, web_submit_data, etc.)
+- `JMXGenerator`: Create JMeter JMX XML with proper structure
+
+**Utils** (utils/):
+
+- `validators.py`: File validation (size, encoding, format)
+- `formatters.py`: Code formatting, truncation for UI
+- `helpers.py`: Common utilities (file I/O, output filename generation)
+- `constants.py`: Element type constants, error codes
+- `comparator.py`: Side-by-side script diff with similarity metrics
+
+### Streamlit App Structure (app.py)
+
+Session state management for:
+
+- Converted content (jmx_converted_content, lr_converted_content)
+- Conversion logs (jmx_conversion_log, lr_conversion_log)
+- Preview settings (show_full_original, show_full_converted)
+- Comparison state (compare_content_left/right, compare_diff_lines)
+
+Three main tabs:
+
+1. **JMeter → LoadRunner**: Upload JMX → Convert → Preview/Download C script
+2. **LoadRunner → JMeter**: Upload C → Convert → Preview/Download JMX
+3. **Compare Scripts**: Side-by-side diff with change highlighting
+
+## Critical Implementation Details
+
+### JMX Parsing (JMeter Structure)
+
+- JMeter uses `<hashTree>` elements for hierarchy: each element followed by hashTree containing children
+- Parse flow: Root jmeterTestPlan → TestPlan → hashTree → ThreadGroup → hashTree → Samplers/Timers/etc.
+- Method: `_parse_hash_tree()` recursively processes element + next sibling hashTree
+- Variable syntax: `${varname}` in JMeter → `lr_eval_string("{varname}")` in LoadRunner
+
+### LoadRunner Code Generation Rules
+
+- **ALL web functions MUST end with `LAST` parameter** (required by LoadRunner API)
+- Correlation placement: `web_reg_save_param()` must appear BEFORE the request it applies to
+- Thread settings: Converted as comments (Runtime Settings configured in GUI)
+- String escaping: Use C-style escaping for quotes and special chars
+- Transaction structure: `lr_start_transaction()` before requests, `lr_end_transaction()` after
 
 ### Correlation Conversion
-**Regex → LB/RB:**
-- Extract left boundary and right boundary from regex patterns
-- Handle capture groups correctly
-- Set Ordinal (1=first occurrence, -1=last, All=all)
 
-**LB/RB → Regex:**
-- Escape special regex characters in boundaries
-- Create proper capture group syntax
-- Handle greedy vs non-greedy matching
+**JMeter RegexExtractor → LoadRunner web_reg_save_param:**
 
-### Error Handling
-- Validate file extensions (.jmx, .c)
-- Check file size limits (max 10MB)
-- Handle encoding issues (UTF-8, EUC-KR)
-- Provide clear error messages for unsupported elements
-- Log warnings for partial conversions
+- Extract Left Boundary (LB) and Right Boundary (RB) from regex
+- Example: `token":"([^"]+)` → LB=`token":"`, RB=`"`, Ordinal=1
 
-### Variable Handling
-- JMeter variables `${var}` convert to LoadRunner `lr_eval_string("{var}")`
-- lr_save_string creates new variables in LoadRunner
-- Track variable scope and usage across the script
+**LoadRunner web_reg_save_param → JMeter RegexExtractor:**
 
-## Testing Requirements
+- Escape special regex chars in LB/RB
+- Construct pattern: `LB + ([^RB]+) + RB`
+- Set match_number from Ordinal (1=first, -1=last, 0=random)
 
-- Write unit tests for each parser, generator, and converter class
-- Include integration tests for full conversion workflows
-- Test with real JMeter and LoadRunner scripts
-- Validate generated scripts can load in target tools
-- Target: 80%+ code coverage
+## Element Mapping Reference
 
-## Code Style
+### JMeter → LoadRunner
 
-- Use Python type hints for function signatures
-- Write docstrings for all classes and public methods
-- Follow PEP 8 style guidelines
-- Use meaningful variable names (avoid abbreviations)
-- Keep functions focused and small (< 50 lines preferred)
+| JMeter Element | LoadRunner Function | Notes |
+|----------------|---------------------|-------|
+| HTTPSamplerProxy (GET) | `web_url()` | Simple GET requests |
+| HTTPSamplerProxy (POST) | `web_submit_data()` | Form submissions |
+| HTTPSamplerProxy (PUT/DELETE) | `web_custom_request()` | Custom HTTP methods |
+| ThreadGroup | vuser_init/Action/vuser_end | Structure only, thread count → comments |
+| HeaderManager | `web_add_header()` | Per-request headers |
+| RegexExtractor | `web_reg_save_param()` | LB/RB extraction |
+| JSONExtractor | `web_reg_save_param_json()` | JSONPath extraction |
+| ConstantTimer | `lr_think_time()` | Delays in milliseconds→seconds |
+| TransactionController | `lr_start/end_transaction()` | Named transactions |
 
-## Known Limitations
+### LoadRunner → JMeter
 
+| LoadRunner Function | JMeter Element | Notes |
+|---------------------|----------------|-------|
+| `web_url()` | HTTPSamplerProxy (GET) | Parse URL parameter |
+| `web_submit_data()` | HTTPSamplerProxy (POST) | Parse ITEMDATA array |
+| `web_custom_request()` | HTTPSamplerProxy | Method from Method parameter |
+| `web_add_header()` | HeaderManager | Header name/value pairs |
+| `web_reg_save_param()` | RegexExtractor | LB/RB → regex pattern |
+| `lr_think_time()` | ConstantTimer | Seconds→milliseconds |
+
+## Sample Files
+
+Located in `samples/` directory:
+
+- `01_simple_get.jmx` / `.c` - Basic GET request
+- `02_post_with_params.jmx` / `.c` - POST with form data
+- `03_with_headers.jmx` / `.c` - Custom headers
+- `04_with_regex_extractor.jmx` / `04_with_correlation.c` - Correlation examples
+- `05_with_json_extractor.jmx` / `05_with_transaction.c` - JSON/transactions
+- Additional complex scenarios (06-10.jmx)
+
+Use these for testing changes to parsers/generators.
+
+## Known Constraints
+
+- JMeter plugins not supported (standard elements only)
+- HTTP protocol only (no WebSocket, FTP, etc.)
 - Complex custom functions require manual adjustment
-- LoadRunner GUI-based settings documented as comments
-- JMeter plugins not supported
-- Only standard HTTP protocol supported
-- Some advanced LoadRunner functions may not have JMeter equivalents
+- LoadRunner GUI settings (Runtime Settings) documented as comments
+- Assertions converted with warnings (manual lr_error_message implementation needed)
