@@ -275,9 +275,9 @@ class LRGenerator:
 
         lines = []
         lines.append(self._indent(f'{LR_FUNCTIONS["WEB_URL"]}('))
-        lines.append(self._indent(f'    "{escaped_name}",', level=1))
-        lines.append(self._indent(f'    "URL={escaped_url}",', level=1))
-        lines.append(self._indent('    LAST);', level=1))
+        lines.append(self._indent(f'"{escaped_name}",', level=2))
+        lines.append(self._indent(f'"URL={escaped_url}",', level=2))
+        lines.append(self._indent('LAST);', level=2))
 
         return "\n".join(lines)
 
@@ -298,15 +298,15 @@ class LRGenerator:
 
         lines = []
         lines.append(self._indent(f'{LR_FUNCTIONS["WEB_SUBMIT_DATA"]}('))
-        lines.append(self._indent(f'    "{escaped_name}",', level=1))
-        lines.append(self._indent(f'    "Action={escaped_url}",', level=1))
+        lines.append(self._indent(f'"{escaped_name}",', level=2))
+        lines.append(self._indent(f'"Action={escaped_url}",', level=2))
 
         # Add POST parameters (check both 'parameters' and 'arguments' for backward compatibility)
         parameters = sampler.get('parameters', sampler.get('arguments', []))
         post_body = sampler.get('body', sampler.get('post_body', ''))
 
         if parameters:
-            lines.append(self._indent('    "Method=POST",', level=1))
+            lines.append(self._indent('"Method=POST",', level=2))
             # Add parameters as ITEMDATA
             for param in parameters:
                 param_name = self.formatter.escape_c_string(param['name'])
@@ -316,13 +316,13 @@ class LRGenerator:
                 if '${' in param_value:
                     param_value = self.string_helper.convert_jmeter_to_lr_variable(param_value)
 
-                lines.append(self._indent(f'    ITEMDATA,', level=1))
-                lines.append(self._indent(f'        "Name={param_name}", "Value={param_value}", ENDITEM,', level=1))
+                lines.append(self._indent('ITEMDATA,', level=2))
+                lines.append(self._indent(f'"Name={param_name}", "Value={param_value}", ENDITEM,', level=3))
         elif post_body:
             escaped_body = self.formatter.escape_c_string(post_body)
-            lines.append(self._indent(f'    "Body={escaped_body}",', level=1))
+            lines.append(self._indent(f'"Body={escaped_body}",', level=2))
 
-        lines.append(self._indent('    LAST);', level=1))
+        lines.append(self._indent('LAST);', level=2))
 
         return "\n".join(lines)
 
@@ -344,17 +344,17 @@ class LRGenerator:
 
         lines = []
         lines.append(self._indent(f'{LR_FUNCTIONS["WEB_CUSTOM_REQUEST"]}('))
-        lines.append(self._indent(f'    "{escaped_name}",', level=1))
-        lines.append(self._indent(f'    "URL={escaped_url}",', level=1))
-        lines.append(self._indent(f'    "Method={method}",', level=1))
+        lines.append(self._indent(f'"{escaped_name}",', level=2))
+        lines.append(self._indent(f'"URL={escaped_url}",', level=2))
+        lines.append(self._indent(f'"Method={method}",', level=2))
 
         # Add body if present
-        post_body = sampler.get('post_body', '')
+        post_body = sampler.get('body', sampler.get('post_body', ''))
         if post_body:
             escaped_body = self.formatter.escape_c_string(post_body)
-            lines.append(self._indent(f'    "Body={escaped_body}",', level=1))
+            lines.append(self._indent(f'"Body={escaped_body}",', level=2))
 
-        lines.append(self._indent('    LAST);', level=1))
+        lines.append(self._indent('LAST);', level=2))
 
         return "\n".join(lines)
 
