@@ -61,6 +61,20 @@ st.markdown("""
         font-size: 1.1rem;
         font-weight: 600;
     }
+
+    /* Enhanced code block styling for better syntax highlighting */
+    .stCodeBlock {
+        background-color: #1e1e1e !important;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+
+    /* Improve XML/code readability */
+    code {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+        font-size: 0.9rem !important;
+        line-height: 1.5 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -138,6 +152,42 @@ SAMPLE_LR_FILES = {
     "Correlation Example": "samples/04_with_correlation.c",
     "Transaction with Think Time": "samples/05_with_transaction.c",
 }
+
+
+def format_xml_for_display(xml_content):
+    """
+    Format XML content for better display readability
+
+    Args:
+        xml_content: Raw XML string
+
+    Returns:
+        Formatted XML string with proper indentation
+    """
+    try:
+        import xml.dom.minidom as minidom
+
+        # Parse and prettify
+        dom = minidom.parseString(xml_content)
+        pretty_xml = dom.toprettyxml(indent="  ", encoding='utf-8').decode('utf-8')
+
+        # Remove extra blank lines
+        lines = []
+        for line in pretty_xml.split('\n'):
+            if not line.strip():
+                continue
+            if line.strip().startswith('<?xml') and 'version="1.0"' in line:
+                continue
+            lines.append(line)
+
+        # Add proper XML declaration
+        xml_declaration = '<?xml version="1.0" encoding="utf-8"?>'
+        result = [xml_declaration] + lines
+
+        return '\n'.join(result)
+    except Exception:
+        # If formatting fails, return original content
+        return xml_content
 
 
 def load_sample_file(file_path):
@@ -577,6 +627,9 @@ def main():
                         content = uploaded_file.read().decode('utf-8')
                     else:
                         content = st.session_state.jmx_sample_file['content']
+
+                    # Format XML for better readability
+                    content = format_xml_for_display(content)
 
                     formatter = CodeFormatter()
                     total_lines = len(content.split('\n'))
