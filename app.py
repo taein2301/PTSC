@@ -190,6 +190,57 @@ def format_xml_for_display(xml_content):
         return xml_content
 
 
+def format_c_for_display(c_content):
+    """
+    Format C code content for better display readability
+
+    Args:
+        c_content: Raw C code string
+
+    Returns:
+        Formatted C code string with improved indentation and spacing
+    """
+    try:
+        lines = c_content.split('\n')
+        formatted_lines = []
+        indent_level = 0
+        prev_line_was_blank = False
+
+        for line in lines:
+            stripped = line.strip()
+
+            # Skip multiple consecutive blank lines
+            if not stripped:
+                if not prev_line_was_blank:
+                    formatted_lines.append('')
+                    prev_line_was_blank = True
+                continue
+
+            prev_line_was_blank = False
+
+            # Decrease indent for closing braces
+            if stripped.startswith('}'):
+                indent_level = max(0, indent_level - 1)
+
+            # Apply indentation (4 spaces per level)
+            if stripped:
+                formatted_line = '    ' * indent_level + stripped
+                formatted_lines.append(formatted_line)
+
+            # Increase indent after opening braces
+            if stripped.endswith('{'):
+                indent_level += 1
+
+        # Remove trailing empty lines
+        while formatted_lines and not formatted_lines[-1].strip():
+            formatted_lines.pop()
+
+        return '\n'.join(formatted_lines)
+    except Exception:
+        # If formatting fails, return original content
+        return c_content
+
+
 def load_sample_file(file_path):
     """Load a sample file from the samples directory"""
     try:
@@ -809,6 +860,9 @@ def main():
                         content = uploaded_file_lr.read().decode('utf-8')
                     else:
                         content = st.session_state.lr_sample_file['content']
+
+                    # Format C code for better readability
+                    content = format_c_for_display(content)
 
                     formatter = CodeFormatter()
                     total_lines = len(content.split('\n'))
