@@ -150,8 +150,14 @@ class LRGenerator:
             headers = thread_group.get('headers', [])
             if headers:
                 lines.append(self._indent("// Add headers"))
-                for header in headers:
-                    lines.append(self._generate_header_call(header))
+                for header_manager in headers:
+                    # HeaderManager contains a nested 'headers' array
+                    if isinstance(header_manager, dict) and 'headers' in header_manager:
+                        for header in header_manager['headers']:
+                            lines.append(self._generate_header_call(header))
+                    elif isinstance(header_manager, dict) and 'name' in header_manager and 'value' in header_manager:
+                        # Direct header dict
+                        lines.append(self._generate_header_call(header_manager))
                 lines.append("")
 
             # Process samplers
@@ -160,40 +166,53 @@ class LRGenerator:
             timers = thread_group.get('timers', [])
             controllers = thread_group.get('controllers', [])
 
-            # Track transaction controllers
-            in_transaction = False
-            transaction_name = None
+            # Handle transactions that wrap multiple samplers
+            # TransactionControllers are separate from samplers in JMeter structure
+            transaction_controllers = [c for c in controllers if c.get('type') == 'TransactionController']
 
-            for sampler_idx, sampler in enumerate(samplers):
-                # Check if this sampler is in a transaction
-                if controllers and sampler_idx < len(controllers):
-                    controller = controllers[sampler_idx]
-                    if controller.get('type') == 'transaction' and not in_transaction:
-                        transaction_name = controller['name']
-                        lines.append(self._generate_transaction_start(transaction_name))
-                        in_transaction = True
-
-                # Add extractors that apply to this sampler (placed BEFORE request)
-                if extractors:
-                    for extractor in extractors:
-                        lines.append(self._generate_extractor(extractor))
-
-                # Generate the HTTP request
-                lines.append(self._generate_http_request(sampler))
-                lines.append("")
-
-                # Add think time if specified
-                if timers and sampler_idx < len(timers):
-                    timer = timers[sampler_idx]
-                    lines.append(self._generate_think_time(timer))
+            # If there are transaction controllers, wrap samplers
+            if transaction_controllers:
+                for trans_ctrl in transaction_controllers:
+                    trans_name = trans_ctrl.get('name', 'Transaction')
+                    lines.append(self._generate_transaction_start(trans_name))
                     lines.append("")
 
-                # Close transaction if needed
-                if in_transaction and (sampler_idx == len(samplers) - 1 or
-                                      (sampler_idx + 1 < len(controllers) and
-                                       controllers[sampler_idx + 1].get('type') != 'transaction')):
-                    lines.append(self._generate_transaction_end(transaction_name))
-                    in_transaction = False
+                    # Add all samplers inside this transaction
+                    for sampler_idx, sampler in enumerate(samplers):
+                        # Add extractors that apply to this sampler (placed BEFORE request)
+                        if extractors:
+                            for extractor in extractors:
+                                lines.append(self._generate_extractor(extractor))
+
+                        # Generate the HTTP request
+                        lines.append(self._generate_http_request(sampler))
+                        lines.append("")
+
+                        # Add think time if specified
+                        if timers and sampler_idx < len(timers):
+                            timer = timers[sampler_idx]
+                            lines.append(self._generate_think_time(timer))
+                            lines.append("")
+
+                    lines.append(self._generate_transaction_end(trans_name))
+                    lines.append("")
+            else:
+                # No transactions, just generate samplers
+                for sampler_idx, sampler in enumerate(samplers):
+                    # Add extractors that apply to this sampler (placed BEFORE request)
+                    if extractors:
+                        for extractor in extractors:
+                            lines.append(self._generate_extractor(extractor))
+
+                    # Generate the HTTP request
+                    lines.append(self._generate_http_request(sampler))
+                    lines.append("")
+
+                    # Add think time if specified
+                    if timers and sampler_idx < len(timers):
+                        timer = timers[sampler_idx]
+                        lines.append(self._generate_think_time(timer))
+                        lines.append("")
 
         lines.append(self._indent("return 0;"))
         lines.append("}")
@@ -282,22 +301,23 @@ class LRGenerator:
         lines.append(self._indent(f'    "{escaped_name}",', level=1))
         lines.append(self._indent(f'    "Action={escaped_url}",', level=1))
 
-        # Add POST parameters
-        arguments = sampler.get('arguments', [])
-        post_body = sampler.get('post_body', '')
+        # Add POST parameters (check both 'parameters' and 'arguments' for backward compatibility)
+        parameters = sampler.get('parameters', sampler.get('arguments', []))
+        post_body = sampler.get('body', sampler.get('post_body', ''))
 
-        if arguments:
+        if parameters:
             lines.append(self._indent('    "Method=POST",', level=1))
-            for arg in arguments:
-                arg_name = self.formatter.escape_c_string(arg['name'])
-                arg_value = self.formatter.escape_c_string(arg['value'])
+            # Add parameters as ITEMDATA
+            for param in parameters:
+                param_name = self.formatter.escape_c_string(param['name'])
+                param_value = self.formatter.escape_c_string(param['value'])
 
                 # Convert JMeter variables to LoadRunner format
-                if '${' in arg_value:
-                    arg_value = self.string_helper.convert_jmeter_to_lr_variable(arg_value)
-                    lines.append(self._indent(f'    "Name={arg_name}", "Value={arg_value}",', level=1))
-                else:
-                    lines.append(self._indent(f'    "Name={arg_name}", "Value={arg_value}",', level=1))
+                if '${' in param_value:
+                    param_value = self.string_helper.convert_jmeter_to_lr_variable(param_value)
+
+                lines.append(self._indent(f'    ITEMDATA,', level=1))
+                lines.append(self._indent(f'        "Name={param_name}", "Value={param_value}", ENDITEM,', level=1))
         elif post_body:
             escaped_body = self.formatter.escape_c_string(post_body)
             lines.append(self._indent(f'    "Body={escaped_body}",', level=1))
