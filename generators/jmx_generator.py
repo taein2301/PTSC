@@ -58,14 +58,8 @@ class JMXGenerator:
         thread_group_hashtree = ET.SubElement(test_plan_hashtree, 'hashTree')
         self._add_samplers_to_hashtree(thread_group_hashtree, parsed_data)
 
-        # Convert to string with formatting
-        xml_string = ET.tostring(root, encoding='utf-8')
-        dom = minidom.parseString(xml_string)
-        pretty_xml = dom.toprettyxml(indent="  ", encoding='utf-8').decode('utf-8')
-
-        # Remove extra blank lines
-        lines = [line for line in pretty_xml.split('\n') if line.strip()]
-        return '\n'.join(lines)
+        # Convert to string with improved formatting
+        return self._format_xml(root)
 
     def _create_test_plan(self, parsed_data: Dict[str, Any]) -> ET.Element:
         """
@@ -550,3 +544,39 @@ class JMXGenerator:
         ET.SubElement(cookie_manager, 'collectionProp', {'name': 'CookieManager.cookies'})
 
         return cookie_manager
+
+    def _format_xml(self, root: ET.Element) -> str:
+        """
+        Format XML with consistent indentation and clean output
+
+        Args:
+            root: Root XML element
+
+        Returns:
+            Formatted XML string
+        """
+        # Convert to string first
+        xml_string = ET.tostring(root, encoding='utf-8')
+
+        # Parse with minidom for pretty printing
+        dom = minidom.parseString(xml_string)
+
+        # Generate pretty XML with 2-space indentation
+        pretty_xml = dom.toprettyxml(indent="  ", encoding='utf-8').decode('utf-8')
+
+        # Clean up the output
+        lines = []
+        for line in pretty_xml.split('\n'):
+            # Skip empty lines
+            if not line.strip():
+                continue
+            # Skip XML declaration if it's the default one (we'll add our own)
+            if line.strip().startswith('<?xml') and 'version="1.0"' in line:
+                continue
+            lines.append(line)
+
+        # Add proper XML declaration at the beginning
+        xml_declaration = '<?xml version="1.0" encoding="utf-8"?>'
+        result = [xml_declaration] + lines
+
+        return '\n'.join(result)
