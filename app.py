@@ -318,7 +318,8 @@ def extract_jmx_settings(jmx_content):
                 'loops': 1,
                 'duration': 0,
                 'delay': 0,
-                'scheduler': False
+                'scheduler': False,
+                'loop_controllers': []  # Store child LoopControllers
             }
 
             # Extract enabled status
@@ -377,6 +378,48 @@ def extract_jmx_settings(jmx_content):
                     tg_settings['delay'] = int(delay_prop.text)
                 except ValueError:
                     pass
+
+            # Extract child LoopControllers (not the main_controller)
+            # Find the hashTree element that follows this ThreadGroup
+            # We need to look in the parent context to find sibling hashTree
+            parent_map = {c: p for p in root.iter() for c in p}
+            parent = parent_map.get(tg)
+            if parent is not None:
+                # Find index of current ThreadGroup
+                children = list(parent)
+                tg_index = children.index(tg)
+                # The next element should be the hashTree containing children
+                if tg_index + 1 < len(children):
+                    tg_hashtree = children[tg_index + 1]
+                    if tg_hashtree.tag == 'hashTree':
+                        # Find LoopController elements in this hashTree
+                        loop_controllers = tg_hashtree.findall('.//LoopController[@testclass="LoopController"]')
+                        for lc in loop_controllers:
+                            lc_name = lc.get('testname', 'Loop Controller')
+                            lc_enabled = True
+                            lc_loops = 1
+
+                            # Check if enabled
+                            lc_enabled_prop = lc.find(".//boolProp[@name='TestElement.enabled']")
+                            if lc_enabled_prop is not None and lc_enabled_prop.text:
+                                lc_enabled = lc_enabled_prop.text.lower() == 'true'
+
+                            # Get loop count
+                            lc_loops_prop = lc.find(".//stringProp[@name='LoopController.loops']")
+                            if lc_loops_prop is None:
+                                lc_loops_prop = lc.find(".//intProp[@name='LoopController.loops']")
+
+                            if lc_loops_prop is not None and lc_loops_prop.text:
+                                try:
+                                    lc_loops = int(lc_loops_prop.text)
+                                except ValueError:
+                                    pass
+
+                            tg_settings['loop_controllers'].append({
+                                'name': lc_name,
+                                'enabled': lc_enabled,
+                                'loops': lc_loops
+                            })
 
             settings['thread_groups'].append(tg_settings)
 
@@ -865,19 +908,35 @@ def main():
                                 if tg['scheduler']:
                                     st.info("⏰ Scheduler Enabled")
 
+                            # Display child LoopControllers if present
+                            if tg.get('loop_controllers'):
+                                st.markdown("**🔄 Loop Controllers (Action 내부 루프):**")
+                                for lc in tg['loop_controllers']:
+                                    status = "✅" if lc['enabled'] else "❌"
+                                    st.info(f"{status} **{lc['name']}**: {lc['loops']}회 반복")
+
                             # LoadRunner configuration guidance
                             st.markdown("**LoadRunner Configuration:**")
-                            st.code(f"""
-Runtime Settings > Run Logic:
+                            config_text = f"""Runtime Settings > Run Logic:
   - Number of Vusers: {tg['num_threads']}
   - Start: All Vusers simultaneously
     OR Gradually: {tg['num_threads']} Vusers every {tg['ramp_time']} seconds
 
 Runtime Settings > Run Logic > Run:
-  - Iterations: {loop_text}
-{'  - Duration: ' + str(tg['duration']) + ' seconds' if tg['scheduler'] and tg['duration'] > 0 else ''}
-{'  - Start after: ' + str(tg['delay']) + ' seconds' if tg['scheduler'] and tg['delay'] > 0 else ''}
-                            """.strip(), language="text")
+  - Iterations: {loop_text}"""
+
+                            if tg['scheduler'] and tg['duration'] > 0:
+                                config_text += f"\n  - Duration: {tg['duration']} seconds"
+                            if tg['scheduler'] and tg['delay'] > 0:
+                                config_text += f"\n  - Start after: {tg['delay']} seconds"
+
+                            # Add Loop Controller information
+                            if tg.get('loop_controllers'):
+                                config_text += "\n\nAction 내부 Loop Controllers:"
+                                for lc in tg['loop_controllers']:
+                                    config_text += f"\n  - {lc['name']}: for 루프 {lc['loops']}회 반복"
+
+                            st.code(config_text, language="text")
 
                     st.markdown("---")
             except Exception as e:
