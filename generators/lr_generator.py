@@ -19,7 +19,8 @@ class LRGenerator:
         self.formatter = CodeFormatter()
         self.string_helper = StringHelper()
         self.indent_level = 1
-        self.indent_size = 4
+        self.use_tabs = True  # LoadRunner uses tabs for indentation
+        self.snapshot_counter = 1  # Track snapshot IDs for LoadRunner functions
 
     def generate(self, parsed_data: Dict[str, Any]) -> str:
         """
@@ -46,8 +47,8 @@ class LRGenerator:
 
         full_script = "\n".join(script_parts)
 
-        # Format the code
-        return self.formatter.format_c_code(full_script)
+        # Return without additional formatting - already properly formatted
+        return full_script
 
     def _generate_header(self, parsed_data: Dict[str, Any]) -> str:
         """
@@ -57,28 +58,30 @@ class LRGenerator:
             parsed_data: Parsed test plan data
 
         Returns:
-            Header section as string
+            Header section as string with Korean comments
         """
         test_plan_name = parsed_data.get('test_plan', {}).get('name', 'Unknown Test Plan')
 
         header = f"""/*
- * LoadRunner C Script
- * Converted from JMeter Test Plan: {test_plan_name}
+ * ============================================================================
+ * LoadRunner C 스크립트
+ * ============================================================================
  *
- * NOTE: This script was automatically converted.
- * Please review and test before using in production.
+ * 변환 정보:
+ *   - 원본: JMeter Test Plan ({test_plan_name})
+ *   - 변환 도구: Performance Test Script Converter (PTSC)
+ *   - 생성일: 자동 변환
+ *
+ * 주의사항:
+ *   이 스크립트는 자동으로 변환되었습니다.
+ *   프로덕션 환경에서 사용하기 전에 반드시 검토 및 테스트를 수행하세요.
+ *
+ * ============================================================================
  */
 
 #include "web_api.h"
 #include "lrun.h"
 #include "web_custom_body.h"
-
-/*
- * Runtime Settings:
- * - Thread Count: Configure in Runtime Settings > Run Logic
- * - Ramp-up: Configure in Runtime Settings > Run Logic > Start
- * - Think Time: Configure in Runtime Settings > Think Time
- */
 """
         return header
 
@@ -90,24 +93,30 @@ class LRGenerator:
             parsed_data: Parsed test plan data
 
         Returns:
-            vuser_init function as string
+            vuser_init function as string with Korean comments
         """
         lines = []
+        lines.append("/*")
+        lines.append(" * ============================================================================")
+        lines.append(" * vuser_init - 가상 사용자 초기화")
+        lines.append(" * ============================================================================")
+        lines.append(" * 설명:")
+        lines.append(" *   각 가상 사용자(Vuser)가 스크립트 실행을 시작하기 전에 한 번 실행됩니다.")
+        lines.append(" *   로그인 정보, 전역 변수 등을 초기화하는 용도로 사용됩니다.")
+        lines.append(" *")
+        lines.append(" * 실행 시점:")
+        lines.append(" *   - Action 함수 실행 전")
+        lines.append(" *   - 각 Vuser당 1회만 실행")
+        lines.append(" * ============================================================================")
+        lines.append(" */")
         lines.append(f"{LR_FUNCTIONS['VUSER_INIT']}()")
         lines.append("{")
 
-        # Add user variables initialization
-        user_vars = parsed_data.get('user_variables', {})
-        if user_vars:
-            lines.append(self._indent("// User defined variables"))
-            for var_name, var_value in user_vars.items():
-                safe_name = self.string_helper.sanitize_variable_name(var_name)
-                escaped_value = self.formatter.escape_c_string(var_value)
-                lines.append(self._indent(f'lr_save_string("{escaped_value}", "{safe_name}");'))
-            lines.append("")
-
         # Add common initialization
-        lines.append(self._indent("// Set web options"))
+        lines.append(self._indent("// ========================================"))
+        lines.append(self._indent("// 초기 설정"))
+        lines.append(self._indent("// ========================================"))
+        lines.append(self._indent('// 초기 대기 시간 (1초)'))
         lines.append(self._indent('lr_think_time(1);'))
         lines.append("")
         lines.append(self._indent("return 0;"))
@@ -123,9 +132,24 @@ class LRGenerator:
             parsed_data: Parsed test plan data
 
         Returns:
-            Action function as string
+            Action function as string with Korean comments
         """
         lines = []
+        lines.append("")
+        lines.append("/*")
+        lines.append(" * ============================================================================")
+        lines.append(" * Action - 메인 비즈니스 로직")
+        lines.append(" * ============================================================================")
+        lines.append(" * 설명:")
+        lines.append(" *   실제 부하 테스트 시나리오가 실행되는 메인 함수입니다.")
+        lines.append(" *   HTTP 요청, 트랜잭션, 검증 등 주요 비즈니스 로직이 포함됩니다.")
+        lines.append(" *")
+        lines.append(" * 실행 시점:")
+        lines.append(" *   - vuser_init 실행 후")
+        lines.append(" *   - Runtime Settings에 설정된 횟수만큼 반복 실행")
+        lines.append(" *   - vuser_end 실행 전")
+        lines.append(" * ============================================================================")
+        lines.append(" */")
         lines.append(f"{LR_FUNCTIONS['ACTION']}()")
         lines.append("{")
 
@@ -133,7 +157,7 @@ class LRGenerator:
         thread_groups = parsed_data.get('thread_groups', [])
 
         if not thread_groups:
-            lines.append(self._indent("// No samplers to convert"))
+            lines.append(self._indent("// 변환할 샘플러가 없습니다"))
             lines.append(self._indent("return 0;"))
             lines.append("}")
             return "\n".join(lines)
@@ -160,59 +184,92 @@ class LRGenerator:
                         lines.append(self._generate_header_call(header_manager))
                 lines.append("")
 
-            # Process samplers
-            samplers = thread_group.get('samplers', [])
-            extractors = thread_group.get('extractors', [])
-            timers = thread_group.get('timers', [])
+            # Process controllers in order (they now contain their children)
             controllers = thread_group.get('controllers', [])
+            samplers = thread_group.get('samplers', [])  # Top-level samplers not in controllers
 
-            # Handle transactions that wrap multiple samplers
-            # TransactionControllers are separate from samplers in JMeter structure
-            transaction_controllers = [c for c in controllers if c.get('type') == 'TransactionController']
+            # Process all controllers in the order they appear
+            for controller in controllers:
+                ctrl_type = controller.get('type')
+                ctrl_name = controller.get('name', 'Controller')
 
-            # If there are transaction controllers, wrap samplers
-            if transaction_controllers:
-                for trans_ctrl in transaction_controllers:
-                    trans_name = trans_ctrl.get('name', 'Transaction')
-                    lines.append(self._generate_transaction_start(trans_name))
+                if ctrl_type == 'TransactionController':
+                    # Start transaction
+                    lines.append(self._generate_transaction_start(ctrl_name))
                     lines.append("")
 
-                    # Add all samplers inside this transaction
-                    for sampler_idx, sampler in enumerate(samplers):
-                        # Add extractors that apply to this sampler (placed BEFORE request)
-                        if extractors:
-                            for extractor in extractors:
-                                lines.append(self._generate_extractor(extractor))
+                    # Process samplers inside this transaction
+                    ctrl_samplers = controller.get('samplers', [])
+                    ctrl_extractors = controller.get('extractors', [])
+                    ctrl_timers = controller.get('timers', [])
 
-                        # Generate the HTTP request
+                    # Track which extractors/timers have been used
+                    extractor_idx = 0
+                    timer_idx = 0
+
+                    for sampler_idx, sampler in enumerate(ctrl_samplers):
+                        # Add extractor for THIS sampler (one extractor per sampler)
+                        if extractor_idx < len(ctrl_extractors):
+                            lines.append(self._generate_extractor(ctrl_extractors[extractor_idx]))
+                            extractor_idx += 1
+
+                        # Generate HTTP request
                         lines.append(self._generate_http_request(sampler))
                         lines.append("")
 
-                        # Add think time if specified
-                        if timers and sampler_idx < len(timers):
-                            timer = timers[sampler_idx]
-                            lines.append(self._generate_think_time(timer))
+                        # Add timer for THIS sampler (one timer per sampler)
+                        if timer_idx < len(ctrl_timers):
+                            lines.append(self._generate_think_time(ctrl_timers[timer_idx]))
+                            lines.append("")
+                            timer_idx += 1
+
+                    # End transaction
+                    lines.append(self._generate_transaction_end(ctrl_name))
+                    lines.append("")
+
+                elif ctrl_type == 'LoopController':
+                    loop_count = controller.get('loops', 1)
+
+                    # Start loop
+                    lines.append(self._indent(f'// ======================================== 루프 시작: {ctrl_name} (반복 {loop_count}회) ========================================', level=1))
+                    lines.append(self._generate_for_loop_start(loop_count))
+                    lines.append("")
+
+                    # Process samplers inside loop
+                    loop_samplers = controller.get('samplers', [])
+                    loop_extractors = controller.get('extractors', [])
+                    loop_timers = controller.get('timers', [])
+
+                    for sampler_idx, sampler in enumerate(loop_samplers):
+                        # Add extractors before sampler
+                        for extractor in loop_extractors:
+                            extractor_lines = self._generate_extractor(extractor).split('\n')
+                            for extr_line in extractor_lines:
+                                lines.append(self._indent(extr_line, level=2))
+
+                        # Generate HTTP request with extra indentation
+                        request_lines = self._generate_http_request(sampler).split('\n')
+                        for req_line in request_lines:
+                            lines.append(self._indent(req_line, level=2))
+                        lines.append("")
+
+                        # Add timers
+                        for timer in loop_timers:
+                            timer_lines = self._generate_timer(timer).split('\n')
+                            for timer_line in timer_lines:
+                                lines.append(self._indent(timer_line, level=2))
                             lines.append("")
 
-                    lines.append(self._generate_transaction_end(trans_name))
+                    # End loop
+                    lines.append(self._generate_for_loop_end())
+                    lines.append(self._indent(f'// ======================================== 루프 종료: {ctrl_name} ========================================', level=1))
                     lines.append("")
-            else:
-                # No transactions, just generate samplers
-                for sampler_idx, sampler in enumerate(samplers):
-                    # Add extractors that apply to this sampler (placed BEFORE request)
-                    if extractors:
-                        for extractor in extractors:
-                            lines.append(self._generate_extractor(extractor))
 
-                    # Generate the HTTP request
+            # Process any top-level samplers (not in controllers)
+            if samplers:
+                for sampler in samplers:
                     lines.append(self._generate_http_request(sampler))
                     lines.append("")
-
-                    # Add think time if specified
-                    if timers and sampler_idx < len(timers):
-                        timer = timers[sampler_idx]
-                        lines.append(self._generate_think_time(timer))
-                        lines.append("")
 
         lines.append(self._indent("return 0;"))
         lines.append("}")
@@ -227,12 +284,30 @@ class LRGenerator:
             parsed_data: Parsed test plan data
 
         Returns:
-            vuser_end function as string
+            vuser_end function as string with Korean comments
         """
         lines = []
+        lines.append("")
+        lines.append("/*")
+        lines.append(" * ============================================================================")
+        lines.append(" * vuser_end - 가상 사용자 종료")
+        lines.append(" * ============================================================================")
+        lines.append(" * 설명:")
+        lines.append(" *   각 가상 사용자(Vuser)가 스크립트 실행을 종료한 후 한 번 실행됩니다.")
+        lines.append(" *   연결 해제, 리소스 정리 등을 수행하는 용도로 사용됩니다.")
+        lines.append(" *")
+        lines.append(" * 실행 시점:")
+        lines.append(" *   - Action 함수 실행 후")
+        lines.append(" *   - 각 Vuser당 1회만 실행")
+        lines.append(" * ============================================================================")
+        lines.append(" */")
         lines.append(f"{LR_FUNCTIONS['VUSER_END']}()")
         lines.append("{")
-        lines.append(self._indent("// Cleanup code"))
+        lines.append(self._indent("// ========================================"))
+        lines.append(self._indent("// 종료 처리"))
+        lines.append(self._indent("// ========================================"))
+        lines.append(self._indent("// 필요시 로그아웃, 연결 해제 등의 정리 작업을 수행합니다"))
+        lines.append("")
         lines.append(self._indent("return 0;"))
         lines.append("}")
 
@@ -240,50 +315,69 @@ class LRGenerator:
 
     def _generate_http_request(self, sampler: Dict[str, Any]) -> str:
         """
-        Generate HTTP request function call
+        Generate HTTP request function call with Korean comments
 
         Args:
             sampler: Sampler data dictionary
 
         Returns:
-            LoadRunner web function call
+            LoadRunner web function call with Korean comments
         """
         method = sampler.get('method', 'GET').upper()
         name = sampler.get('name', 'HTTP Request')
         url = self._build_url(sampler)
 
-        if method == 'GET':
-            return self._generate_web_url(name, url)
-        elif method == 'POST':
-            return self._generate_web_submit_data(sampler, name, url)
-        else:
-            return self._generate_web_custom_request(sampler, name, url, method)
+        # Add Korean comment before the request
+        comment_lines = []
+        comment_lines.append(self._indent("// ----------------------------------------"))
+        comment_lines.append(self._indent(f"// HTTP 요청: {name}"))
+        comment_lines.append(self._indent(f"// 메서드: {method}"))
+        comment_lines.append(self._indent(f"// URL: {url[:80]}{'...' if len(url) > 80 else ''}"))
+        comment_lines.append(self._indent("// ----------------------------------------"))
 
-    def _generate_web_url(self, name: str, url: str) -> str:
+        comment = "\n".join(comment_lines) + "\n"
+
+        if method == 'GET':
+            return comment + self._generate_web_url(name, url, sampler)
+        elif method == 'POST':
+            return comment + self._generate_web_submit_data(sampler, name, url)
+        else:
+            return comment + self._generate_web_custom_request(sampler, name, url, method)
+
+    def _generate_web_url(self, name: str, url: str, sampler: Dict[str, Any] = None) -> str:
         """
-        Generate web_url function call
+        Generate web_url function call with LoadRunner VuGen standard parameters
 
         Args:
             name: Step name
             url: Full URL
+            sampler: Optional sampler data for additional parameters
 
         Returns:
-            web_url function call
+            web_url function call with complete LoadRunner standard parameters
         """
         escaped_name = self.formatter.escape_c_string(name)
         escaped_url = self.formatter.escape_c_string(url)
+        snapshot_id = self._get_next_snapshot()
+
+        # Use consistent indentation with spaces (4 spaces for level 1)
+        indent = "    "  # 4 spaces
 
         lines = []
-        lines.append(self._indent(f'{LR_FUNCTIONS["WEB_URL"]}('))
-        lines.append(self._indent(f'"{escaped_name}",', level=2))
-        lines.append(self._indent(f'"URL={escaped_url}",', level=2))
-        lines.append(self._indent('LAST);', level=2))
+        lines.append(indent + f'{LR_FUNCTIONS["WEB_URL"]}("{escaped_name}", ')
+        lines.append(indent + f'    "URL={escaped_url}", ')
+        lines.append(indent + f'    "Resource=0", ')
+        lines.append(indent + f'    "RecContentType=text/html", ')
+        lines.append(indent + f'    "Referer=", ')
+        lines.append(indent + f'    "Snapshot={snapshot_id}", ')
+        lines.append(indent + f'    "Mode=HTML", ')
+        lines.append(indent + f'    LAST );')
 
         return "\n".join(lines)
 
     def _generate_web_submit_data(self, sampler: Dict[str, Any], name: str, url: str) -> str:
         """
-        Generate web_submit_data function call
+        Generate web_submit_data function call with LoadRunner VuGen standard parameters
 
         Args:
             sampler: Sampler data
@@ -291,23 +385,33 @@ class LRGenerator:
             url: Full URL
 
         Returns:
-            web_submit_data function call
+            web_submit_data function call with complete LoadRunner standard parameters
         """
         escaped_name = self.formatter.escape_c_string(name)
         escaped_url = self.formatter.escape_c_string(url)
+        snapshot_id = self._get_next_snapshot()
+
+        # Use consistent indentation with spaces (4 spaces for level 1)
+        indent = "    "  # 4 spaces
 
         lines = []
-        lines.append(self._indent(f'{LR_FUNCTIONS["WEB_SUBMIT_DATA"]}('))
-        lines.append(self._indent(f'"{escaped_name}",', level=2))
-        lines.append(self._indent(f'"Action={escaped_url}",', level=2))
+        lines.append(indent + f'{LR_FUNCTIONS["WEB_SUBMIT_DATA"]}("{escaped_name}", ')
+        lines.append(indent + f'    "Action={escaped_url}", ')
 
         # Add POST parameters (check both 'parameters' and 'arguments' for backward compatibility)
         parameters = sampler.get('parameters', sampler.get('arguments', []))
         post_body = sampler.get('body', sampler.get('post_body', ''))
 
+        # Add standard parameters
+        lines.append(indent + f'    "Method=POST", ')
+        lines.append(indent + f'    "RecContentType=text/html", ')
+        lines.append(indent + f'    "Referer=", ')
+        lines.append(indent + f'    "Snapshot={snapshot_id}", ')
+        lines.append(indent + f'    "Mode=HTML", ')
+
+        # Add parameters as ITEMDATA if present
         if parameters:
-            lines.append(self._indent('"Method=POST",', level=2))
-            # Add parameters as ITEMDATA
+            lines.append(indent + f'    ITEMDATA, ')
             for param in parameters:
                 param_name = self.formatter.escape_c_string(param['name'])
                 param_value = self.formatter.escape_c_string(param['value'])
@@ -316,45 +420,49 @@ class LRGenerator:
                 if '${' in param_value:
                     param_value = self.string_helper.convert_jmeter_to_lr_variable(param_value)
 
-                lines.append(self._indent('ITEMDATA,', level=2))
-                lines.append(self._indent(f'"Name={param_name}", "Value={param_value}", ENDITEM,', level=3))
-        elif post_body:
-            escaped_body = self.formatter.escape_c_string(post_body)
-            lines.append(self._indent(f'"Body={escaped_body}",', level=2))
+                lines.append(indent + f'    "Name={param_name}", "Value={param_value}", ENDITEM, ')
 
-        lines.append(self._indent('LAST);', level=2))
+        lines.append(indent + f'    LAST );')
 
         return "\n".join(lines)
 
     def _generate_web_custom_request(self, sampler: Dict[str, Any], name: str, url: str, method: str) -> str:
         """
-        Generate web_custom_request function call
+        Generate web_custom_request function call with LoadRunner VuGen standard parameters
 
         Args:
             sampler: Sampler data
             name: Step name
             url: Full URL
-            method: HTTP method
+            method: HTTP method (PUT, DELETE, PATCH, etc.)
 
         Returns:
-            web_custom_request function call
+            web_custom_request function call with complete LoadRunner standard parameters
         """
         escaped_name = self.formatter.escape_c_string(name)
         escaped_url = self.formatter.escape_c_string(url)
+        snapshot_id = self._get_next_snapshot()
+
+        # Use consistent indentation with spaces (4 spaces for level 1)
+        indent = "    "  # 4 spaces
 
         lines = []
-        lines.append(self._indent(f'{LR_FUNCTIONS["WEB_CUSTOM_REQUEST"]}('))
-        lines.append(self._indent(f'"{escaped_name}",', level=2))
-        lines.append(self._indent(f'"URL={escaped_url}",', level=2))
-        lines.append(self._indent(f'"Method={method}",', level=2))
+        lines.append(indent + f'{LR_FUNCTIONS["WEB_CUSTOM_REQUEST"]}("{escaped_name}", ')
+        lines.append(indent + f'    "URL={escaped_url}", ')
+        lines.append(indent + f'    "Method={method}", ')
+        lines.append(indent + f'    "Resource=0", ')
+        lines.append(indent + f'    "RecContentType=text/html", ')
+        lines.append(indent + f'    "Referer=", ')
+        lines.append(indent + f'    "Snapshot={snapshot_id}", ')
+        lines.append(indent + f'    "Mode=HTML", ')
 
         # Add body if present
         post_body = sampler.get('body', sampler.get('post_body', ''))
         if post_body:
             escaped_body = self.formatter.escape_c_string(post_body)
-            lines.append(self._indent(f'"Body={escaped_body}",', level=2))
+            lines.append(indent + f'    "Body={escaped_body}", ')
 
-        lines.append(self._indent('LAST);', level=2))
+        lines.append(indent + f'    LAST );')
 
         return "\n".join(lines)
 
@@ -371,7 +479,7 @@ class LRGenerator:
         name = self.formatter.escape_c_string(header['name'])
         value = self.formatter.escape_c_string(header['value'])
 
-        return self._indent(f'{LR_FUNCTIONS["WEB_ADD_HEADER"]}("{name}", "{value}");')
+        return self._indent(f'{LR_FUNCTIONS["WEB_ADD_HEADER"]}("{name}", "{value}");', level=1)
 
     def _generate_cookie_call(self, cookie: Dict[str, Any]) -> str:
         """
@@ -422,13 +530,13 @@ class LRGenerator:
 
     def _generate_regex_extractor(self, extractor: Dict[str, Any]) -> str:
         """
-        Generate web_reg_save_param for regex extraction
+        Generate web_reg_save_param for regex extraction with LoadRunner VuGen standard parameters
 
         Args:
             extractor: Extractor data
 
         Returns:
-            web_reg_save_param function call
+            web_reg_save_param function call with complete LoadRunner standard parameters and Korean comments
         """
         refname = extractor.get('refname', 'param')
         regex = extractor.get('regex', '')
@@ -438,22 +546,39 @@ class LRGenerator:
         # This is a basic conversion - real implementation would be more sophisticated
         lb, rb = self._convert_regex_to_boundaries(regex)
 
-        lines = []
-        lines.append(self._indent(f'{LR_FUNCTIONS["WEB_REG_SAVE_PARAM"]}('))
-        lines.append(self._indent(f'    "{refname}",', level=1))
-        lines.append(self._indent(f'    "LB={lb}",', level=1))
-        lines.append(self._indent(f'    "RB={rb}",', level=1))
+        # Escape the boundaries properly
+        lb_escaped = self.formatter.escape_c_string(lb)
+        rb_escaped = self.formatter.escape_c_string(rb)
 
         # Convert match_no: -1 = last, 0 or 1 = first, >1 = specific instance
         if match_no == '-1':
             ordinal = 'Last'
+            ordinal_kr = '마지막'
         elif match_no == '0':
             ordinal = 'All'
+            ordinal_kr = '전체'
         else:
             ordinal = match_no
+            ordinal_kr = f'{match_no}번째'
 
-        lines.append(self._indent(f'    "Ordinal={ordinal}",', level=1))
-        lines.append(self._indent('    LAST);', level=1))
+        # Use consistent indentation with spaces (4 spaces for level 1)
+        indent = "    "  # 4 spaces
+
+        lines = []
+        lines.append(indent + "// ----------------------------------------")
+        lines.append(indent + f"// 상관관계(Correlation): {refname}")
+        lines.append(indent + f"// 좌측 경계(LB): {lb[:40]}{'...' if len(lb) > 40 else ''}")
+        lines.append(indent + f"// 우측 경계(RB): {rb[:40]}{'...' if len(rb) > 40 else ''}")
+        lines.append(indent + f"// 추출 순서: {ordinal_kr} 값")
+        lines.append(indent + "// 주의: 이 함수는 HTTP 요청 전에 위치해야 합니다")
+        lines.append(indent + "// ----------------------------------------")
+        lines.append(indent + f'{LR_FUNCTIONS["WEB_REG_SAVE_PARAM"]}("{refname}", ')
+        lines.append(indent + f'    "LB={lb_escaped}", ')
+        lines.append(indent + f'    "RB={rb_escaped}", ')
+        lines.append(indent + f'    "Ord={ordinal}", ')
+        lines.append(indent + f'    "Search=Body", ')
+        lines.append(indent + f'    "RelFrameID=All", ')
+        lines.append(indent + f'    LAST );')
 
         return "\n".join(lines)
 
@@ -471,57 +596,66 @@ class LRGenerator:
         jsonpath = extractor.get('jsonpath', '')
 
         lines = []
-        lines.append(self._indent(f'{LR_FUNCTIONS["WEB_REG_SAVE_PARAM_JSON"]}('))
-        lines.append(self._indent(f'    "ParamName={refname}",', level=1))
-        lines.append(self._indent(f'    "QueryString={jsonpath}",', level=1))
-        lines.append(self._indent('    LAST);', level=1))
+        lines.append(self._indent(f'{LR_FUNCTIONS["WEB_REG_SAVE_PARAM_JSON"]}(', level=1))
+        lines.append(self._indent(f'"ParamName={refname}", ', level=2))
+        lines.append(self._indent(f'"QueryString={jsonpath}", ', level=2))
+        lines.append(self._indent('LAST );', level=2))
 
         return "\n".join(lines)
 
     def _generate_think_time(self, timer: Dict[str, Any]) -> str:
         """
-        Generate lr_think_time call
+        Generate lr_think_time call with Korean comments
 
         Args:
             timer: Timer data
 
         Returns:
-            lr_think_time function call
+            lr_think_time function call with Korean comments
         """
         delay = timer.get('delay', '0')
 
         # Convert milliseconds to seconds (JMeter uses ms, LR uses seconds)
         try:
             delay_seconds = float(delay) / 1000.0
-            return self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}({delay_seconds:.1f});')
+            delay_ms = int(float(delay))
+            comment = self._indent(f'// Think Time: {delay_ms}ms = {delay_seconds:.1f}초 대기', level=1)
+            think_time = self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}({delay_seconds:.1f});', level=1)
+            return f"{comment}\n{think_time}"
         except ValueError:
-            return self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}(1);')
+            comment = self._indent('// Think Time: 기본 1초 대기', level=1)
+            think_time = self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}(1);', level=1)
+            return f"{comment}\n{think_time}"
 
     def _generate_transaction_start(self, name: str) -> str:
         """
-        Generate lr_start_transaction call
+        Generate lr_start_transaction call with Korean comments
 
         Args:
             name: Transaction name
 
         Returns:
-            lr_start_transaction function call
+            lr_start_transaction function call with Korean comments
         """
         escaped_name = self.formatter.escape_c_string(name)
-        return self._indent(f'{LR_FUNCTIONS["LR_START_TRANSACTION"]}("{escaped_name}");')
+        comment = self._indent(f'// ======================================== 트랜잭션 시작: {name} ========================================', level=1)
+        trans_start = self._indent(f'{LR_FUNCTIONS["LR_START_TRANSACTION"]}("{escaped_name}");', level=1)
+        return f"{comment}\n{trans_start}"
 
     def _generate_transaction_end(self, name: str) -> str:
         """
-        Generate lr_end_transaction call
+        Generate lr_end_transaction call with Korean comments
 
         Args:
             name: Transaction name
 
         Returns:
-            lr_end_transaction function call
+            lr_end_transaction function call with Korean comments
         """
         escaped_name = self.formatter.escape_c_string(name)
-        return self._indent(f'{LR_FUNCTIONS["LR_END_TRANSACTION"]}("{escaped_name}", LR_AUTO);')
+        comment = self._indent(f'// ======================================== 트랜잭션 종료: {name} ========================================', level=1)
+        trans_end = self._indent(f'{LR_FUNCTIONS["LR_END_TRANSACTION"]}("{escaped_name}", LR_AUTO);', level=1)
+        return f"{comment}\n{trans_end}"
 
     def _build_url(self, sampler: Dict[str, Any]) -> str:
         """
@@ -556,7 +690,10 @@ class LRGenerator:
         """
         Convert regex pattern to left/right boundaries
 
-        This is a simplified conversion. Real implementation would be more sophisticated.
+        Supports common regex capture group patterns:
+        - (.+?) - non-greedy any character
+        - (.*) - greedy any character
+        - ([^X]+) - any character except X
 
         Args:
             regex: Regular expression
@@ -564,21 +701,27 @@ class LRGenerator:
         Returns:
             Tuple of (left_boundary, right_boundary)
         """
-        # Simple heuristic: look for patterns like "prefix(.+?)suffix"
-        # This is very basic and should be enhanced for production use
+        import re as regex_module
 
-        if '(.+?)' in regex:
-            parts = regex.split('(.+?)')
-            lb = parts[0] if len(parts) > 0 else ''
-            rb = parts[1] if len(parts) > 1 else ''
-            return (lb, rb)
-        elif '(.*)' in regex:
-            parts = regex.split('(.*)')
-            lb = parts[0] if len(parts) > 0 else ''
-            rb = parts[1] if len(parts) > 1 else ''
+        # Pattern to find capture groups: (...)
+        capture_pattern = r'\(([^)]+)\)'
+        match = regex_module.search(capture_pattern, regex)
+
+        if match:
+            # Found a capture group
+            capture_group = match.group(0)  # Full match with parentheses
+            start_pos = match.start()
+            end_pos = match.end()
+
+            # Extract left boundary (everything before capture group)
+            lb = regex[:start_pos]
+
+            # Extract right boundary (everything after capture group)
+            rb = regex[end_pos:]
+
             return (lb, rb)
         else:
-            # Fallback
+            # No capture group found, use entire regex as LB
             return (regex, '')
 
     def _generate_if_statement(self, condition: str, body_lines: List[str]) -> str:
@@ -596,13 +739,13 @@ class LRGenerator:
         # Convert JMeter condition to C condition if needed
         c_condition = self._convert_condition_to_c(condition)
 
-        lines.append(self._indent(f'if ({c_condition})'))
-        lines.append(self._indent('{'))
+        lines.append(self._indent(f'if ({c_condition})', level=1))
+        lines.append(self._indent('{', level=1))
 
         for body_line in body_lines:
-            lines.append(self._indent(body_line, level=self.indent_level + 1))
+            lines.append(self._indent(body_line, level=2))
 
-        lines.append(self._indent('}'))
+        lines.append(self._indent('}', level=1))
 
         return "\n".join(lines)
 
@@ -618,15 +761,38 @@ class LRGenerator:
             Complete for loop
         """
         lines = []
-        lines.append(self._indent(f'for (int i = 0; i < {loop_count}; i++)'))
-        lines.append(self._indent('{'))
+        lines.append(self._indent(f'for (int i = 0; i < {loop_count}; i++)', level=1))
+        lines.append(self._indent('{', level=1))
 
         for body_line in body_lines:
-            lines.append(self._indent(body_line, level=self.indent_level + 1))
+            lines.append(self._indent(body_line, level=2))
 
-        lines.append(self._indent('}'))
+        lines.append(self._indent('}', level=1))
 
         return "\n".join(lines)
+
+    def _generate_for_loop_start(self, loop_count: int) -> str:
+        """
+        Generate for loop opening
+
+        Args:
+            loop_count: Number of iterations
+
+        Returns:
+            For loop opening statement
+        """
+        indent = "    "  # 4 spaces
+        return indent + f'for (int loop_i = 0; loop_i < {loop_count}; loop_i++)\n' + indent + '{'
+
+    def _generate_for_loop_end(self) -> str:
+        """
+        Generate for loop closing
+
+        Returns:
+            For loop closing brace
+        """
+        indent = "    "  # 4 spaces
+        return indent + '}'
 
     def _generate_variable_save(self, var_name: str, var_value: str) -> str:
         """
@@ -642,7 +808,7 @@ class LRGenerator:
         escaped_value = self.formatter.escape_c_string(var_value)
         safe_name = self.string_helper.sanitize_variable_name(var_name)
 
-        return self._indent(f'{LR_FUNCTIONS["LR_SAVE_STRING"]}("{escaped_value}", "{safe_name}");')
+        return self._indent(f'{LR_FUNCTIONS["LR_SAVE_STRING"]}("{escaped_value}", "{safe_name}");', level=1)
 
     def _generate_error_check(self, assertion: Dict[str, Any]) -> str:
         """
@@ -668,12 +834,12 @@ class LRGenerator:
             escaped_pattern = self.formatter.escape_c_string(pattern)
 
             if test_type in ['contains', 'matches']:
-                lines.append(self._indent('// Assertion: Check response contains expected value'))
-                lines.append(self._indent('if (/* response check failed */)'))
-                lines.append(self._indent('{'))
-                lines.append(self._indent(f'    {LR_FUNCTIONS["LR_ERROR_MESSAGE"]}("Assertion failed: Expected pattern not found - {escaped_pattern}");', level=1))
-                lines.append(self._indent(f'    {LR_FUNCTIONS["LR_ABORT"]}();', level=1))
-                lines.append(self._indent('}'))
+                lines.append(self._indent('// Assertion: Check response contains expected value', level=1))
+                lines.append(self._indent('if (/* response check failed */)', level=1))
+                lines.append(self._indent('{', level=1))
+                lines.append(self._indent(f'{LR_FUNCTIONS["LR_ERROR_MESSAGE"]}("Assertion failed: Expected pattern not found - {escaped_pattern}");', level=2))
+                lines.append(self._indent(f'{LR_FUNCTIONS["LR_ABORT"]}();', level=2))
+                lines.append(self._indent('}', level=1))
 
         return "\n".join(lines)
 
@@ -708,6 +874,17 @@ class LRGenerator:
 
         return condition
 
+    def _get_next_snapshot(self) -> str:
+        """
+        Generate next snapshot ID in LoadRunner format (t1.inf, t2.inf, etc.)
+
+        Returns:
+            Snapshot ID string
+        """
+        snapshot = f"t{self.snapshot_counter}.inf"
+        self.snapshot_counter += 1
+        return snapshot
+
     def _indent(self, text: str, level: int = None) -> str:
         """
         Add indentation to text
@@ -722,5 +899,6 @@ class LRGenerator:
         if level is None:
             level = self.indent_level
 
-        spaces = ' ' * (level * self.indent_size)
-        return spaces + text
+        # LoadRunner uses tabs for indentation
+        indent = '\t' * level
+        return indent + text

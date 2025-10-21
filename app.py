@@ -9,6 +9,7 @@ This application provides bidirectional conversion between:
 
 import streamlit as st
 import os
+from code_editor import code_editor
 from converters.jmeter_to_lr import JMeterToLRConverter
 from converters.lr_to_jmeter import LRToJMeterConverter
 from utils.validators import FileValidator
@@ -21,59 +22,102 @@ st.set_page_config(
     page_title="Performance Test Script Converter",
     page_icon="🔄",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for styling
+# Custom CSS for styling - LG CNS Brand Colors
 st.markdown("""
 <style>
+    /* LG CNS Color Palette:
+       Primary: #A50034 (LG Red)
+       Secondary: #000000 (Black)
+       Accent: #666666 (Gray)
+       Background: #F5F5F5 (Light Gray)
+       Success: #00A651 (Green)
+    */
+
     .main-header {
         font-size: 2.5rem;
         font-weight: 700;
-        color: #1E88E5;
+        color: #A50034;
         text-align: center;
         margin-bottom: 0.5rem;
     }
     .sub-header {
         font-size: 1.2rem;
-        color: #666;
+        color: #666666;
         text-align: center;
         margin-bottom: 2rem;
     }
     .stTabs [data-baseweb="tab-list"] {
         gap: 2rem;
+        background-color: #F5F5F5;
+        padding: 0.5rem;
+        border-radius: 8px;
     }
     .stTabs [data-baseweb="tab"] {
         height: 50px;
         padding-left: 20px;
         padding-right: 20px;
         font-size: 1.1rem;
+        color: #666666;
+        background-color: transparent;
+        border-radius: 6px;
+    }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: #A50034;
+        color: white;
     }
     .upload-section {
-        border: 2px dashed #1E88E5;
+        border: 2px dashed #A50034;
         border-radius: 10px;
         padding: 2rem;
         margin: 1rem 0;
+        background-color: #FAFAFA;
     }
     .stButton>button {
         width: 100%;
         height: 3rem;
         font-size: 1.1rem;
         font-weight: 600;
+        background-color: #A50034;
+        color: white;
+        border: none;
+        border-radius: 6px;
     }
-
-    /* Enhanced code block styling for better syntax highlighting */
-    .stCodeBlock {
-        background-color: #1e1e1e !important;
-        border-radius: 8px;
-        padding: 1rem;
+    .stButton>button:hover {
+        background-color: #8B002C;
+        color: white;
     }
-
-    /* Improve XML/code readability */
-    code {
-        font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
-        font-size: 0.9rem !important;
-        line-height: 1.5 !important;
+    .stDownloadButton>button {
+        background-color: #00A651;
+        color: white;
+        border: none;
+    }
+    .stDownloadButton>button:hover {
+        background-color: #008A43;
+    }
+    /* Metrics styling */
+    [data-testid="stMetricValue"] {
+        color: #A50034;
+    }
+    /* Success/Info boxes */
+    .stSuccess {
+        background-color: #E8F5E9;
+        border-left: 4px solid #00A651;
+    }
+    .stInfo {
+        background-color: #FFFFFF;
+        border: 1px solid #E0E0E0;
+        border-left: 4px solid #A50034;
+    }
+    /* Main content background */
+    .main {
+        background-color: #FFFFFF;
+    }
+    /* Sidebar background */
+    [data-testid="stSidebar"] {
+        background-color: #F5F5F5;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -87,6 +131,8 @@ if 'jmx_output_filename' not in st.session_state:
     st.session_state.jmx_output_filename = None
 if 'jmx_sample_file' not in st.session_state:
     st.session_state.jmx_sample_file = None
+if 'jmx_uploader_key' not in st.session_state:
+    st.session_state.jmx_uploader_key = 0
 
 if 'lr_converted_content' not in st.session_state:
     st.session_state.lr_converted_content = None
@@ -96,6 +142,8 @@ if 'lr_output_filename' not in st.session_state:
     st.session_state.lr_output_filename = None
 if 'lr_sample_file' not in st.session_state:
     st.session_state.lr_sample_file = None
+if 'lr_uploader_key' not in st.session_state:
+    st.session_state.lr_uploader_key = 0
 
 # Conversion settings (for future enhancements)
 if 'indent_size' not in st.session_state:
@@ -105,15 +153,6 @@ if 'include_comments' not in st.session_state:
 if 'error_handling_level' not in st.session_state:
     st.session_state.error_handling_level = 'Standard'
 
-# Preview settings (lines to show)
-if 'jmx_preview_lines_original' not in st.session_state:
-    st.session_state.jmx_preview_lines_original = 30
-if 'jmx_preview_lines_converted' not in st.session_state:
-    st.session_state.jmx_preview_lines_converted = 30
-if 'lr_preview_lines_original' not in st.session_state:
-    st.session_state.lr_preview_lines_original = 30
-if 'lr_preview_lines_converted' not in st.session_state:
-    st.session_state.lr_preview_lines_converted = 30
 
 # Conversion history
 if 'conversion_history' not in st.session_state:
@@ -193,43 +232,29 @@ def format_xml_for_display(xml_content):
 def format_c_for_display(c_content):
     """
     Format C code content for better display readability
+    Only cleans up excessive blank lines, preserves existing indentation
 
     Args:
         c_content: Raw C code string
 
     Returns:
-        Formatted C code string with improved indentation and spacing
+        Formatted C code string with cleaned spacing
     """
     try:
         lines = c_content.split('\n')
         formatted_lines = []
-        indent_level = 0
         prev_line_was_blank = False
 
         for line in lines:
-            stripped = line.strip()
-
             # Skip multiple consecutive blank lines
-            if not stripped:
+            if not line.strip():
                 if not prev_line_was_blank:
                     formatted_lines.append('')
                     prev_line_was_blank = True
                 continue
 
             prev_line_was_blank = False
-
-            # Decrease indent for closing braces
-            if stripped.startswith('}'):
-                indent_level = max(0, indent_level - 1)
-
-            # Apply indentation (4 spaces per level)
-            if stripped:
-                formatted_line = '    ' * indent_level + stripped
-                formatted_lines.append(formatted_line)
-
-            # Increase indent after opening braces
-            if stripped.endswith('{'):
-                indent_level += 1
+            formatted_lines.append(line)
 
         # Remove trailing empty lines
         while formatted_lines and not formatted_lines[-1].strip():
@@ -239,6 +264,126 @@ def format_c_for_display(c_content):
     except Exception:
         # If formatting fails, return original content
         return c_content
+
+
+def extract_jmx_settings(jmx_content):
+    """
+    Extract ThreadGroup settings and user variables from JMX content for display
+
+    Args:
+        jmx_content: JMX XML content string
+
+    Returns:
+        Dictionary with test plan, thread group settings, and user variables
+    """
+    try:
+        import xml.etree.ElementTree as ET
+
+        root = ET.fromstring(jmx_content)
+        settings = {
+            'test_plan_name': 'Unknown',
+            'thread_groups': [],
+            'variables': {}
+        }
+
+        # Extract test plan name
+        test_plan = root.find('.//TestPlan')
+        if test_plan is not None:
+            name_prop = test_plan.get('testname')
+            if name_prop:
+                settings['test_plan_name'] = name_prop
+
+        # Extract user defined variables
+        arguments_elem = root.find(".//elementProp[@name='TestPlan.user_defined_variables']")
+        if arguments_elem is not None:
+            collection = arguments_elem.find(".//collectionProp[@name='Arguments.arguments']")
+            if collection is not None:
+                for arg_elem in collection.findall(".//elementProp[@elementType='Argument']"):
+                    var_name_prop = arg_elem.find(".//stringProp[@name='Argument.name']")
+                    var_value_prop = arg_elem.find(".//stringProp[@name='Argument.value']")
+
+                    if var_name_prop is not None and var_name_prop.text:
+                        var_name = var_name_prop.text
+                        var_value = var_value_prop.text if var_value_prop is not None and var_value_prop.text else ''
+                        settings['variables'][var_name] = var_value
+
+        # Extract thread groups
+        thread_groups = root.findall('.//ThreadGroup')
+        for tg in thread_groups:
+            tg_settings = {
+                'name': tg.get('testname', 'Thread Group'),
+                'enabled': True,
+                'num_threads': 1,
+                'ramp_time': 1,
+                'loops': 1,
+                'duration': 0,
+                'delay': 0,
+                'scheduler': False
+            }
+
+            # Extract enabled status
+            enabled_prop = tg.find(".//boolProp[@name='TestElement.enabled']")
+            if enabled_prop is not None and enabled_prop.text:
+                tg_settings['enabled'] = enabled_prop.text.lower() == 'true'
+
+            # Extract num_threads
+            num_threads_prop = tg.find(".//stringProp[@name='ThreadGroup.num_threads']")
+            if num_threads_prop is not None and num_threads_prop.text:
+                try:
+                    tg_settings['num_threads'] = int(num_threads_prop.text)
+                except ValueError:
+                    pass
+
+            # Extract ramp_time
+            ramp_time_prop = tg.find(".//stringProp[@name='ThreadGroup.ramp_time']")
+            if ramp_time_prop is not None and ramp_time_prop.text:
+                try:
+                    tg_settings['ramp_time'] = int(ramp_time_prop.text)
+                except ValueError:
+                    pass
+
+            # Extract loops
+            loop_controller = tg.find(".//elementProp[@name='ThreadGroup.main_controller']")
+            if loop_controller is not None:
+                # Try stringProp first (common format)
+                loops_prop = loop_controller.find(".//stringProp[@name='LoopController.loops']")
+                if loops_prop is None:
+                    # Try intProp (alternative format)
+                    loops_prop = loop_controller.find(".//intProp[@name='LoopController.loops']")
+
+                if loops_prop is not None and loops_prop.text:
+                    try:
+                        tg_settings['loops'] = int(loops_prop.text)
+                    except ValueError:
+                        pass
+
+            # Extract scheduler settings
+            scheduler_prop = tg.find(".//boolProp[@name='ThreadGroup.scheduler']")
+            if scheduler_prop is not None and scheduler_prop.text:
+                tg_settings['scheduler'] = scheduler_prop.text.lower() == 'true'
+
+            # Extract duration
+            duration_prop = tg.find(".//stringProp[@name='ThreadGroup.duration']")
+            if duration_prop is not None and duration_prop.text:
+                try:
+                    tg_settings['duration'] = int(duration_prop.text)
+                except ValueError:
+                    pass
+
+            # Extract delay
+            delay_prop = tg.find(".//stringProp[@name='ThreadGroup.delay']")
+            if delay_prop is not None and delay_prop.text:
+                try:
+                    tg_settings['delay'] = int(delay_prop.text)
+                except ValueError:
+                    pass
+
+            settings['thread_groups'].append(tg_settings)
+
+        return settings
+
+    except Exception as e:
+        return None
 
 
 def load_sample_file(file_path):
@@ -505,7 +650,6 @@ def main():
         - Code preview with syntax highlighting
         - Conversion logs and statistics
         - File validation
-        - Script comparison (side-by-side diff)
         """)
 
         st.markdown("---")
@@ -580,45 +724,49 @@ def main():
             """)
 
     # Main conversion tabs
-    tab1, tab2, tab3 = st.tabs(["🔵 JMeter → LoadRunner", "🟢 LoadRunner → JMeter", "🔍 Compare Scripts"])
+    tab1, tab2 = st.tabs(["🔵 JMeter → LoadRunner", "🟢 LoadRunner → JMeter"])
 
     with tab1:
         st.markdown("### Convert JMeter JMX to LoadRunner C Script")
-        st.info("📌 Upload a JMeter .jmx file to convert it to LoadRunner C script")
 
         # File upload section
-        col1, col2 = st.columns([1, 1])
+        st.markdown("#### 📤 Upload JMX File")
+        uploaded_file = st.file_uploader(
+            "Upload JMX File",
+            type=['jmx'],
+            key=f"jmx_uploader_{st.session_state.jmx_uploader_key}",
+            help="Upload a valid JMeter JMX file (max 10MB)",
+            label_visibility="collapsed"
+        )
 
-        with col1:
-            st.markdown("#### 📤 Upload JMX File")
-            uploaded_file = st.file_uploader(
-                "Choose a JMeter JMX file",
-                type=['jmx'],
-                key="jmx_uploader",
-                help="Upload a valid JMeter JMX file (max 10MB)"
-            )
-
-            if uploaded_file:
-                st.success(f"✅ File uploaded: {uploaded_file.name}")
-                st.text(f"Size: {uploaded_file.size / 1024:.2f} KB")
-
-        with col2:
-            st.markdown("#### 📊 Conversion Status")
-            if st.session_state.jmx_converted_content:
-                st.success("✅ Conversion completed!")
-            elif uploaded_file or st.session_state.jmx_sample_file:
-                st.info("🔄 Converting...")
-            else:
-                st.info("💡 Please upload a JMX file to begin")
-
-        # Auto-convert on file upload
         if uploaded_file:
+            st.success(f"✅ File uploaded: {uploaded_file.name} | Size: {uploaded_file.size / 1024:.2f} KB")
+
+        # Conversion Status in one line
+        if st.session_state.jmx_converted_content:
+            st.success("📊 Conversion Status: ✅ Conversion completed!")
+        elif uploaded_file or st.session_state.jmx_sample_file:
+            st.info("📊 Conversion Status: 🔄 Converting...")
+        else:
+            st.info("📊 Conversion Status: 💡 Please upload a JMX file to begin")
+
+        # Auto-convert on file upload or sample file selection
+        if uploaded_file or st.session_state.jmx_sample_file:
             # Check if we need to convert (file changed)
-            current_file_key = f"{uploaded_file.name}_{uploaded_file.size}"
+            if uploaded_file:
+                current_file_key = f"{uploaded_file.name}_{uploaded_file.size}"
+            else:
+                current_file_key = f"sample_{st.session_state.jmx_sample_file.get('name', 'unknown')}"
+
             if 'jmx_last_file_key' not in st.session_state or st.session_state.jmx_last_file_key != current_file_key:
                 with st.spinner("Converting..."):
-                    uploaded_file.seek(0)  # Reset file pointer
-                    success, output, log_msg = convert_jmx_to_lr(uploaded_file=uploaded_file)
+                    if uploaded_file:
+                        uploaded_file.seek(0)  # Reset file pointer
+                        success, output, log_msg = convert_jmx_to_lr(uploaded_file=uploaded_file)
+                        file_name = uploaded_file.name
+                    else:
+                        success, output, log_msg = convert_jmx_to_lr(sample_file=st.session_state.jmx_sample_file)
+                        file_name = st.session_state.jmx_sample_file.get('name', 'sample.jmx')
 
                     # Update session state
                     st.session_state.jmx_converted_content = output if success else None
@@ -626,7 +774,7 @@ def main():
                     st.session_state.jmx_last_file_key = current_file_key
 
                     # Add to history
-                    add_to_history("JMeter → LoadRunner", uploaded_file.name, success, log_msg)
+                    add_to_history("JMeter → LoadRunner", file_name, success, log_msg)
 
                     # Show message
                     if success:
@@ -656,8 +804,7 @@ def main():
                 st.session_state.jmx_conversion_log = "Ready to convert..."
                 st.session_state.jmx_output_filename = None
                 st.session_state.jmx_sample_file = None
-                st.session_state.jmx_preview_lines_original = 30
-                st.session_state.jmx_preview_lines_converted = 30
+                st.session_state.jmx_uploader_key += 1  # Increment to reset file uploader
                 if 'jmx_last_file_key' in st.session_state:
                     del st.session_state.jmx_last_file_key
                 st.rerun()
@@ -666,6 +813,77 @@ def main():
         has_input = uploaded_file or st.session_state.jmx_sample_file
         if has_input:
             st.markdown("---")
+
+            # Extract and display JMX settings
+            try:
+                if uploaded_file:
+                    uploaded_file.seek(0)
+                    jmx_content = uploaded_file.read().decode('utf-8')
+                else:
+                    jmx_content = st.session_state.jmx_sample_file['content']
+
+                settings = extract_jmx_settings(jmx_content)
+
+                if settings and settings['thread_groups']:
+                    st.markdown("### ⚙️ LoadRunner Runtime Settings Guide")
+
+                    # Display user variables if present
+                    if settings.get('variables'):
+                        st.markdown("#### 📝 JMeter User Defined Variables")
+                        st.info("다음 변수들을 LoadRunner의 Runtime Settings > Parameters에서 설정하세요:")
+
+                        # Create a table for variables
+                        var_data = []
+                        for var_name, var_value in settings['variables'].items():
+                            var_data.append({"Variable Name": var_name, "Value": var_value})
+
+                        if var_data:
+                            import pandas as pd
+                            df = pd.DataFrame(var_data)
+                            st.dataframe(df, use_container_width=True, hide_index=True)
+
+                        st.markdown("---")
+
+                    # Display settings in an info box
+                    for idx, tg in enumerate(settings['thread_groups'], 1):
+                        with st.expander(f"📊 {tg['name']}" + (" (Disabled)" if not tg['enabled'] else ""), expanded=True):
+                            col1, col2, col3 = st.columns(3)
+
+                            with col1:
+                                st.metric("Virtual Users", tg['num_threads'])
+                                if tg['scheduler'] and tg['duration'] > 0:
+                                    st.metric("Duration", f"{tg['duration']}s")
+
+                            with col2:
+                                st.metric("Ramp-Up Time", f"{tg['ramp_time']}s")
+                                if tg['scheduler'] and tg['delay'] > 0:
+                                    st.metric("Start Delay", f"{tg['delay']}s")
+
+                            with col3:
+                                loop_text = "Infinite" if tg['loops'] == -1 else str(tg['loops'])
+                                st.metric("Loop Count", loop_text)
+                                if tg['scheduler']:
+                                    st.info("⏰ Scheduler Enabled")
+
+                            # LoadRunner configuration guidance
+                            st.markdown("**LoadRunner Configuration:**")
+                            st.code(f"""
+Runtime Settings > Run Logic:
+  - Number of Vusers: {tg['num_threads']}
+  - Start: All Vusers simultaneously
+    OR Gradually: {tg['num_threads']} Vusers every {tg['ramp_time']} seconds
+
+Runtime Settings > Run Logic > Run:
+  - Iterations: {loop_text}
+{'  - Duration: ' + str(tg['duration']) + ' seconds' if tg['scheduler'] and tg['duration'] > 0 else ''}
+{'  - Start after: ' + str(tg['delay']) + ' seconds' if tg['scheduler'] and tg['delay'] > 0 else ''}
+                            """.strip(), language="text")
+
+                    st.markdown("---")
+            except Exception as e:
+                # If extraction fails, just skip the settings display
+                pass
+
             st.markdown("### 👁️ Code Preview")
 
             preview_col1, preview_col2 = st.columns(2)
@@ -682,76 +900,64 @@ def main():
                     # Format XML for better readability
                     content = format_xml_for_display(content)
 
-                    formatter = CodeFormatter()
-                    total_lines = len(content.split('\n'))
-                    preview_lines = st.session_state.jmx_preview_lines_original
-
-                    # Show preview or full content
-                    if preview_lines >= total_lines:
-                        st.code(content, language='xml', line_numbers=True)
-                    else:
-                        truncated = formatter.truncate_code(content, max_lines=preview_lines)
-                        st.code(truncated, language='xml', line_numbers=True)
-
-                    # Show More/Less/Reset buttons
-                    if total_lines > 30:
-                        btn_col1, btn_col2, btn_col3 = st.columns(3)
-                        with btn_col1:
-                            if preview_lines < total_lines:
-                                next_lines = min(preview_lines + 50, total_lines)
-                                if st.button("📄 Show More (+50)", key="show_more_jmx_original"):
-                                    st.session_state.jmx_preview_lines_original = next_lines
-                                    st.rerun()
-                        with btn_col2:
-                            if preview_lines > 30:
-                                prev_lines = max(preview_lines - 50, 30)
-                                if st.button("📄 Show Less (-50)", key="show_less_jmx_original"):
-                                    st.session_state.jmx_preview_lines_original = prev_lines
-                                    st.rerun()
-                        with btn_col3:
-                            if preview_lines != 30:
-                                if st.button("🔄 Reset", key="reset_jmx_original"):
-                                    st.session_state.jmx_preview_lines_original = 30
-                                    st.rerun()
+                    # Use code_editor for enhanced display with full content
+                    code_editor(
+                        content,
+                        lang="xml",
+                        theme="monokai",
+                        height=[20, 30],
+                        options={"wrap": True},
+                        buttons=[{
+                            "name": "Copy",
+                            "feather": "Copy",
+                            "hasText": True,
+                            "alwaysOn": True,
+                            "commands": ["copyAll"],
+                            "style": {"top": "0.46rem", "right": "0.4rem"}
+                        }],
+                        key="jmx_original_editor"
+                    )
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
 
             with preview_col2:
                 st.markdown("**Converted LoadRunner C:**")
                 if st.session_state.jmx_converted_content:
-                    formatter = CodeFormatter()
-                    total_lines = len(st.session_state.jmx_converted_content.split('\n'))
-                    preview_lines = st.session_state.jmx_preview_lines_converted
-
-                    # Show preview or full content
-                    if preview_lines >= total_lines:
-                        st.code(st.session_state.jmx_converted_content, language='c', line_numbers=True)
-                    else:
-                        truncated = formatter.truncate_code(st.session_state.jmx_converted_content, max_lines=preview_lines)
-                        st.code(truncated, language='c', line_numbers=True)
-
-                    # Show More/Less/Reset buttons
-                    if total_lines > 30:
-                        btn_col1, btn_col2, btn_col3 = st.columns(3)
-                        with btn_col1:
-                            if preview_lines < total_lines:
-                                next_lines = min(preview_lines + 50, total_lines)
-                                if st.button("📄 Show More (+50)", key="show_more_jmx_converted"):
-                                    st.session_state.jmx_preview_lines_converted = next_lines
-                                    st.rerun()
-                        with btn_col2:
-                            if preview_lines > 30:
-                                prev_lines = max(preview_lines - 50, 30)
-                                if st.button("📄 Show Less (-50)", key="show_less_jmx_converted"):
-                                    st.session_state.jmx_preview_lines_converted = prev_lines
-                                    st.rerun()
-                        with btn_col3:
-                            if preview_lines != 30:
-                                if st.button("🔄 Reset", key="reset_jmx_converted"):
-                                    st.session_state.jmx_preview_lines_converted = 30
-                                    st.rerun()
+                    # Use code_editor for enhanced display with full content
+                    code_editor(
+                        st.session_state.jmx_converted_content,
+                        lang="c_cpp",
+                        theme="dracula",
+                        height=[20, 30],
+                        options={
+                            "wrap": True,
+                            "showGutter": True,
+                            "highlightActiveLine": True,
+                            "showPrintMargin": False,
+                            "fontSize": 14,
+                            "enableBasicAutocompletion": False,
+                            "enableLiveAutocompletion": False,
+                            "useSoftTabs": False,
+                            "tabSize": 4
+                        },
+                        buttons=[{
+                            "name": "Copy",
+                            "feather": "Copy",
+                            "hasText": True,
+                            "alwaysOn": True,
+                            "commands": ["copyAll"],
+                            "style": {"top": "0.46rem", "right": "0.4rem"}
+                        }],
+                        key="jmx_converted_editor"
+                    )
                 else:
-                    st.code("// Conversion result will appear here\n// Upload a file to start", language='c')
+                    code_editor(
+                        "// Conversion result will appear here\n// Upload a file to start",
+                        lang="c_cpp",
+                        theme="dracula",
+                        height=[10, 15],
+                        key="jmx_converted_placeholder"
+                    )
 
         # Conversion log section
         st.markdown("---")
@@ -766,41 +972,45 @@ def main():
 
     with tab2:
         st.markdown("### Convert LoadRunner C Script to JMeter JMX")
-        st.info("📌 Upload a LoadRunner .c file to convert it to JMeter JMX format")
 
         # File upload section
-        col1, col2 = st.columns([1, 1])
+        st.markdown("#### 📤 Upload C File")
+        uploaded_file_lr = st.file_uploader(
+            "Upload C File",
+            type=['c'],
+            key=f"lr_uploader_{st.session_state.lr_uploader_key}",
+            help="Upload a valid LoadRunner C script file (max 10MB)",
+            label_visibility="collapsed"
+        )
 
-        with col1:
-            st.markdown("#### 📤 Upload C File")
-            uploaded_file_lr = st.file_uploader(
-                "Choose a LoadRunner C script file",
-                type=['c'],
-                key="lr_uploader",
-                help="Upload a valid LoadRunner C script file (max 10MB)"
-            )
-
-            if uploaded_file_lr:
-                st.success(f"✅ File uploaded: {uploaded_file_lr.name}")
-                st.text(f"Size: {uploaded_file_lr.size / 1024:.2f} KB")
-
-        with col2:
-            st.markdown("#### 📊 Conversion Status")
-            if st.session_state.lr_converted_content:
-                st.success("✅ Conversion completed!")
-            elif uploaded_file_lr or st.session_state.lr_sample_file:
-                st.info("🔄 Converting...")
-            else:
-                st.info("💡 Please upload a C file to begin")
-
-        # Auto-convert on file upload
         if uploaded_file_lr:
+            st.success(f"✅ File uploaded: {uploaded_file_lr.name} | Size: {uploaded_file_lr.size / 1024:.2f} KB")
+
+        # Conversion Status in one line
+        if st.session_state.lr_converted_content:
+            st.success("📊 Conversion Status: ✅ Conversion completed!")
+        elif uploaded_file_lr or st.session_state.lr_sample_file:
+            st.info("📊 Conversion Status: 🔄 Converting...")
+        else:
+            st.info("📊 Conversion Status: 💡 Please upload a C file to begin")
+
+        # Auto-convert on file upload or sample file selection
+        if uploaded_file_lr or st.session_state.lr_sample_file:
             # Check if we need to convert (file changed)
-            current_file_key = f"{uploaded_file_lr.name}_{uploaded_file_lr.size}"
+            if uploaded_file_lr:
+                current_file_key = f"{uploaded_file_lr.name}_{uploaded_file_lr.size}"
+            else:
+                current_file_key = f"sample_{st.session_state.lr_sample_file.get('name', 'unknown')}"
+
             if 'lr_last_file_key' not in st.session_state or st.session_state.lr_last_file_key != current_file_key:
                 with st.spinner("Converting..."):
-                    uploaded_file_lr.seek(0)  # Reset file pointer
-                    success, output, log_msg = convert_lr_to_jmx(uploaded_file=uploaded_file_lr)
+                    if uploaded_file_lr:
+                        uploaded_file_lr.seek(0)  # Reset file pointer
+                        success, output, log_msg = convert_lr_to_jmx(uploaded_file=uploaded_file_lr)
+                        file_name = uploaded_file_lr.name
+                    else:
+                        success, output, log_msg = convert_lr_to_jmx(sample_file=st.session_state.lr_sample_file)
+                        file_name = st.session_state.lr_sample_file.get('name', 'sample.c')
 
                     # Update session state
                     st.session_state.lr_converted_content = output if success else None
@@ -808,7 +1018,7 @@ def main():
                     st.session_state.lr_last_file_key = current_file_key
 
                     # Add to history
-                    add_to_history("LoadRunner → JMeter", uploaded_file_lr.name, success, log_msg)
+                    add_to_history("LoadRunner → JMeter", file_name, success, log_msg)
 
                     # Show message
                     if success:
@@ -838,8 +1048,7 @@ def main():
                 st.session_state.lr_conversion_log = "Ready to convert..."
                 st.session_state.lr_output_filename = None
                 st.session_state.lr_sample_file = None
-                st.session_state.lr_preview_lines_original = 30
-                st.session_state.lr_preview_lines_converted = 30
+                st.session_state.lr_uploader_key += 1  # Increment to reset file uploader
                 if 'lr_last_file_key' in st.session_state:
                     del st.session_state.lr_last_file_key
                 st.rerun()
@@ -864,81 +1073,61 @@ def main():
                     # Format C code for better readability
                     content = format_c_for_display(content)
 
-                    formatter = CodeFormatter()
-                    total_lines = len(content.split('\n'))
-                    preview_lines = st.session_state.lr_preview_lines_original
-
-                    # Show preview or full content
-                    if preview_lines >= total_lines:
-                        st.code(content, language='c', line_numbers=True)
-                    else:
-                        truncated = formatter.truncate_code(content, max_lines=preview_lines)
-                        st.code(truncated, language='c', line_numbers=True)
-
-                    # Show More/Less/Reset buttons
-                    if total_lines > 30:
-                        btn_col1, btn_col2, btn_col3 = st.columns(3)
-                        with btn_col1:
-                            if preview_lines < total_lines:
-                                next_lines = min(preview_lines + 50, total_lines)
-                                if st.button("📄 Show More (+50)", key="show_more_lr_original"):
-                                    st.session_state.lr_preview_lines_original = next_lines
-                                    st.rerun()
-                        with btn_col2:
-                            if preview_lines > 30:
-                                prev_lines = max(preview_lines - 50, 30)
-                                if st.button("📄 Show Less (-50)", key="show_less_lr_original"):
-                                    st.session_state.lr_preview_lines_original = prev_lines
-                                    st.rerun()
-                        with btn_col3:
-                            if preview_lines != 30:
-                                if st.button("🔄 Reset", key="reset_lr_original"):
-                                    st.session_state.lr_preview_lines_original = 30
-                                    st.rerun()
+                    # Use code_editor for enhanced display with full content
+                    code_editor(
+                        content,
+                        lang="c_cpp",
+                        theme="dracula",
+                        height=[20, 30],
+                        options={
+                            "wrap": True,
+                            "showGutter": True,
+                            "highlightActiveLine": True,
+                            "showPrintMargin": False,
+                            "fontSize": 14,
+                            "enableBasicAutocompletion": False,
+                            "enableLiveAutocompletion": False
+                        },
+                        buttons=[{
+                            "name": "Copy",
+                            "feather": "Copy",
+                            "hasText": True,
+                            "alwaysOn": True,
+                            "commands": ["copyAll"],
+                            "style": {"top": "0.46rem", "right": "0.4rem"}
+                        }],
+                        key="lr_original_editor"
+                    )
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
 
             with preview_col2:
                 st.markdown("**Converted JMX:**")
                 if st.session_state.lr_converted_content:
-                    formatter = CodeFormatter()
-                    total_lines = len(st.session_state.lr_converted_content.split('\n'))
-                    preview_lines = st.session_state.lr_preview_lines_converted
-
-                    # Show preview or full content
-                    if preview_lines >= total_lines:
-                        st.code(st.session_state.lr_converted_content, language='xml', line_numbers=True)
-                    else:
-                        truncated = formatter.truncate_code(
-                            st.session_state.lr_converted_content, max_lines=preview_lines
-                        )
-                        st.code(truncated, language='xml', line_numbers=True)
-
-                    # Show More/Less/Reset buttons
-                    if total_lines > 30:
-                        btn_col1, btn_col2, btn_col3 = st.columns(3)
-                        with btn_col1:
-                            if preview_lines < total_lines:
-                                next_lines = min(preview_lines + 50, total_lines)
-                                if st.button("📄 Show More (+50)", key="show_more_lr_converted"):
-                                    st.session_state.lr_preview_lines_converted = next_lines
-                                    st.rerun()
-                        with btn_col2:
-                            if preview_lines > 30:
-                                prev_lines = max(preview_lines - 50, 30)
-                                if st.button("📄 Show Less (-50)", key="show_less_lr_converted"):
-                                    st.session_state.lr_preview_lines_converted = prev_lines
-                                    st.rerun()
-                        with btn_col3:
-                            if preview_lines != 30:
-                                if st.button("🔄 Reset", key="reset_lr_converted"):
-                                    st.session_state.lr_preview_lines_converted = 30
-                                    st.rerun()
+                    # Use code_editor for enhanced display with full content
+                    code_editor(
+                        st.session_state.lr_converted_content,
+                        lang="xml",
+                        theme="monokai",
+                        height=[20, 30],
+                        options={"wrap": True},
+                        buttons=[{
+                            "name": "Copy",
+                            "feather": "Copy",
+                            "hasText": True,
+                            "alwaysOn": True,
+                            "commands": ["copyAll"],
+                            "style": {"top": "0.46rem", "right": "0.4rem"}
+                        }],
+                        key="lr_converted_editor"
+                    )
                 else:
-                    st.code(
-                        "<!-- Conversion result will appear here -->\n"
-                        "<!-- Upload a file to start -->",
-                        language='xml'
+                    code_editor(
+                        "<!-- Conversion result will appear here -->\n<!-- Upload a file to start -->",
+                        lang="xml",
+                        theme="monokai",
+                        height=[10, 15],
+                        key="lr_converted_placeholder"
                     )
 
         # Conversion log section
@@ -951,272 +1140,6 @@ def main():
             disabled=True,
             label_visibility="collapsed"
         )
-
-    with tab3:
-        st.markdown("### Compare Two Scripts Side-by-Side")
-        st.info("📌 Compare original and converted scripts to see differences")
-
-        # File upload section
-        col1, col2 = st.columns([1, 1])
-
-        with col1:
-            st.markdown("#### 📄 Original Script")
-            compare_file_left = st.file_uploader(
-                "Choose original script",
-                type=['jmx', 'c'],
-                key="compare_uploader_left",
-                help="Upload the original script file"
-            )
-
-            if compare_file_left:
-                st.success(f"✅ File loaded: {compare_file_left.name}")
-                st.text(f"Size: {compare_file_left.size / 1024:.2f} KB")
-                # Store content
-                compare_file_left.seek(0)
-                st.session_state.compare_content_left = compare_file_left.read().decode('utf-8')
-                st.session_state.compare_filename_left = compare_file_left.name
-
-        with col2:
-            st.markdown("#### 📄 Converted Script")
-            compare_file_right = st.file_uploader(
-                "Choose converted script",
-                type=['jmx', 'c'],
-                key="compare_uploader_right",
-                help="Upload the converted script file"
-            )
-
-            if compare_file_right:
-                st.success(f"✅ File loaded: {compare_file_right.name}")
-                st.text(f"Size: {compare_file_right.size / 1024:.2f} KB")
-                # Store content
-                compare_file_right.seek(0)
-                st.session_state.compare_content_right = compare_file_right.read().decode('utf-8')
-                st.session_state.compare_filename_right = compare_file_right.name
-
-        # Action buttons
-        st.markdown("---")
-        button_col1, button_col2, button_col3 = st.columns([1, 1, 1])
-
-        with button_col1:
-            has_both = st.session_state.compare_content_left and st.session_state.compare_content_right
-            compare_btn = st.button("🔍 Compare", key="compare_scripts", disabled=not has_both)
-            if compare_btn and has_both:
-                with st.spinner("Comparing..."):
-                    comparator = ScriptComparator()
-                    diff_lines, stats = comparator.compare(
-                        st.session_state.compare_content_left,
-                        st.session_state.compare_content_right,
-                        label_left=st.session_state.compare_filename_left or "Original",
-                        label_right=st.session_state.compare_filename_right or "Converted"
-                    )
-                    st.session_state.compare_diff_lines = diff_lines
-                    st.session_state.compare_stats = stats
-                    st.success("Comparison completed!")
-                    st.rerun()
-
-        with button_col2:
-            if st.session_state.compare_diff_lines:
-                comparator = ScriptComparator()
-                unified_diff = comparator.generate_unified_diff(
-                    st.session_state.compare_content_left,
-                    st.session_state.compare_content_right,
-                    label_left=st.session_state.compare_filename_left or "Original",
-                    label_right=st.session_state.compare_filename_right or "Converted"
-                )
-                st.download_button(
-                    label="⬇️ Download Diff",
-                    data=unified_diff,
-                    file_name="comparison_diff.patch",
-                    mime="text/plain",
-                    key="download_diff"
-                )
-
-        with button_col3:
-            clear_compare_btn = st.button("🗑️ Clear", key="clear_compare")
-            if clear_compare_btn:
-                st.session_state.compare_content_left = None
-                st.session_state.compare_content_right = None
-                st.session_state.compare_filename_left = None
-                st.session_state.compare_filename_right = None
-                st.session_state.compare_diff_lines = None
-                st.session_state.compare_stats = None
-                st.rerun()
-
-        # Show comparison results
-        if st.session_state.compare_stats:
-            st.markdown("---")
-            st.markdown("### 📊 Comparison Statistics")
-
-            # Display statistics in columns
-            stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
-
-            with stat_col1:
-                st.metric(
-                    "Similarity",
-                    f"{st.session_state.compare_stats.similarity_ratio:.1%}"
-                )
-
-            with stat_col2:
-                st.metric(
-                    "Lines Added",
-                    st.session_state.compare_stats.lines_added,
-                    delta=None
-                )
-
-            with stat_col3:
-                st.metric(
-                    "Lines Removed",
-                    st.session_state.compare_stats.lines_removed,
-                    delta=None
-                )
-
-            with stat_col4:
-                st.metric(
-                    "Lines Modified",
-                    st.session_state.compare_stats.lines_modified,
-                    delta=None
-                )
-
-        # Display diff view
-        if st.session_state.compare_diff_lines:
-            st.markdown("---")
-            st.markdown("### 🔍 Detailed Comparison")
-
-            # Filter options
-            filter_col1, filter_col2 = st.columns([3, 1])
-            with filter_col1:
-                st.session_state.compare_show_unchanged = st.checkbox(
-                    "Show unchanged lines",
-                    value=st.session_state.compare_show_unchanged,
-                    key="show_unchanged_lines"
-                )
-
-            # Filter diff lines
-            comparator = ScriptComparator()
-            filtered_lines = comparator.filter_diff_lines(
-                st.session_state.compare_diff_lines,
-                show_unchanged=st.session_state.compare_show_unchanged
-            )
-
-            # Display diff in a styled format
-            st.markdown("#### Side-by-Side Comparison")
-
-            # Create custom CSS for diff view
-            st.markdown("""
-            <style>
-            .diff-line {
-                font-family: 'Courier New', monospace;
-                font-size: 0.85rem;
-                padding: 2px 5px;
-                margin: 0;
-                white-space: pre-wrap;
-                word-wrap: break-word;
-            }
-            .diff-line-num {
-                display: inline-block;
-                width: 50px;
-                text-align: right;
-                padding-right: 10px;
-                color: #666;
-                user-select: none;
-            }
-            .diff-unchanged {
-                background-color: #f8f9fa;
-            }
-            .diff-added {
-                background-color: #d4edda;
-            }
-            .diff-removed {
-                background-color: #f8d7da;
-            }
-            .diff-modified {
-                background-color: #fff3cd;
-            }
-            .diff-container {
-                border: 1px solid #dee2e6;
-                border-radius: 5px;
-                overflow: hidden;
-                margin-bottom: 1rem;
-            }
-            .diff-header {
-                background-color: #e9ecef;
-                padding: 5px 10px;
-                font-weight: bold;
-                font-size: 0.9rem;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-
-            # Create two-column layout for side-by-side diff
-            diff_col1, diff_col2 = st.columns(2)
-
-            with diff_col1:
-                st.markdown(f'<div class="diff-container"><div class="diff-header">📄 {st.session_state.compare_filename_left or "Original"}</div></div>', unsafe_allow_html=True)
-
-            with diff_col2:
-                st.markdown(f'<div class="diff-container"><div class="diff-header">📄 {st.session_state.compare_filename_right or "Converted"}</div></div>', unsafe_allow_html=True)
-
-            # Display lines (limit to first 500 for performance)
-            max_display_lines = 500
-            display_lines = filtered_lines[:max_display_lines]
-
-            if len(filtered_lines) > max_display_lines:
-                st.warning(f"⚠️ Showing first {max_display_lines} of {len(filtered_lines)} lines. Download the diff for complete comparison.")
-
-            # Build HTML for both columns
-            left_html = []
-            right_html = []
-
-            for line in display_lines:
-                # Determine CSS class
-                if line.change_type == ChangeType.UNCHANGED:
-                    css_class = "diff-unchanged"
-                elif line.change_type == ChangeType.ADDED:
-                    css_class = "diff-added"
-                elif line.change_type == ChangeType.REMOVED:
-                    css_class = "diff-removed"
-                elif line.change_type == ChangeType.MODIFIED:
-                    css_class = "diff-modified"
-                else:
-                    css_class = ""
-
-                # Left column
-                line_num_left = str(line.line_num_left) if line.line_num_left else ""
-                content_left = line.content_left.replace('<', '&lt;').replace('>', '&gt;')
-                left_html.append(
-                    f'<div class="diff-line {css_class}">'
-                    f'<span class="diff-line-num">{line_num_left}</span>'
-                    f'{content_left}</div>'
-                )
-
-                # Right column
-                line_num_right = str(line.line_num_right) if line.line_num_right else ""
-                content_right = line.content_right.replace('<', '&lt;').replace('>', '&gt;')
-                right_html.append(
-                    f'<div class="diff-line {css_class}">'
-                    f'<span class="diff-line-num">{line_num_right}</span>'
-                    f'{content_right}</div>'
-                )
-
-            # Display in columns
-            with diff_col1:
-                st.markdown(f'<div class="diff-container">{"".join(left_html)}</div>', unsafe_allow_html=True)
-
-            with diff_col2:
-                st.markdown(f'<div class="diff-container">{"".join(right_html)}</div>', unsafe_allow_html=True)
-
-            # Legend
-            st.markdown("---")
-            st.markdown("#### 🎨 Legend")
-            legend_col1, legend_col2, legend_col3, legend_col4 = st.columns(4)
-            with legend_col1:
-                st.markdown('<div class="diff-line diff-unchanged" style="padding: 5px;">Unchanged</div>', unsafe_allow_html=True)
-            with legend_col2:
-                st.markdown('<div class="diff-line diff-added" style="padding: 5px;">Added</div>', unsafe_allow_html=True)
-            with legend_col3:
-                st.markdown('<div class="diff-line diff-removed" style="padding: 5px;">Removed</div>', unsafe_allow_html=True)
-            with legend_col4:
-                st.markdown('<div class="diff-line diff-modified" style="padding: 5px;">Modified</div>', unsafe_allow_html=True)
 
     # Footer
     st.markdown("---")
