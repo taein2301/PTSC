@@ -74,8 +74,14 @@ def main():
         print(f"Arguments: {' '.join(sys.argv)}")
         print("=" * 80)
 
+        # Shared variable to track browser process
+        chrome_process = None
+        streamlit_thread = None
+        should_exit = threading.Event()
+
         # Open browser in a separate thread after a delay
         def open_browser():
+            nonlocal chrome_process
             time.sleep(3)
             url = "http://localhost:8501"
             print(f"\nOpening browser at {url}")
@@ -99,8 +105,9 @@ def main():
                         break
 
                 if chrome_path:
-                    # Open in new window with --new-window flag
-                    subprocess.Popen([chrome_path, "--new-window", url])
+                    # Open in new window with --new-window flag and track the process
+                    chrome_process = subprocess.Popen([chrome_path, "--new-window", url])
+                    print("Chrome opened successfully. Monitoring browser...")
                 else:
                     # Fallback to default browser
                     webbrowser.open(url, new=1)
@@ -108,16 +115,45 @@ def main():
                 print(f"Failed to open Chrome, using default browser: {e}")
                 webbrowser.open(url, new=1)
 
+        # Monitor Chrome process - exit when Chrome closes
+        def monitor_browser():
+            nonlocal chrome_process
+            if chrome_process:
+                try:
+                    # Wait for Chrome process to exit
+                    chrome_process.wait()
+                    print("\n\nBrowser closed. Shutting down application...")
+                    should_exit.set()
+                    # Force exit
+                    os._exit(0)
+                except Exception as e:
+                    print(f"Browser monitoring error: {e}")
+
+        # Run Streamlit in a separate thread
+        def run_streamlit():
+            try:
+                stcli.main()
+            except SystemExit:
+                pass
+
         browser_thread = threading.Thread(target=open_browser, daemon=True)
         browser_thread.start()
 
+        # Wait a bit for browser to start
+        time.sleep(5)
+
+        # Start browser monitoring if Chrome was opened
+        if chrome_process:
+            monitor_thread = threading.Thread(target=monitor_browser, daemon=False)
+            monitor_thread.start()
+
         print("\n" + "=" * 80)
         print("Application is running!")
-        print("Press Ctrl+C to stop the application.")
+        print("Close the browser window to stop the application.")
         print("=" * 80 + "\n")
 
-        # Run Streamlit
-        sys.exit(stcli.main())
+        # Run Streamlit in main thread
+        run_streamlit()
 
     except KeyboardInterrupt:
         print("\n\nShutting down...")
