@@ -782,6 +782,15 @@ def main():
             label_visibility="collapsed"
         )
 
+        # Clear previous results if no file is uploaded and no sample is selected
+        if not uploaded_file and not st.session_state.jmx_sample_file:
+            if st.session_state.jmx_converted_content or 'jmx_last_file_key' in st.session_state:
+                st.session_state.jmx_converted_content = None
+                st.session_state.jmx_conversion_log = "Ready to convert..."
+                st.session_state.jmx_output_filename = None
+                if 'jmx_last_file_key' in st.session_state:
+                    del st.session_state.jmx_last_file_key
+
         if uploaded_file:
             st.success(f"✅ File uploaded: {uploaded_file.name} | Size: {uploaded_file.size / 1024:.2f} KB")
 
@@ -1041,6 +1050,15 @@ Runtime Settings > Run Logic > Run:
             help="Upload a valid LoadRunner C script file (max 10MB)",
             label_visibility="collapsed"
         )
+
+        # Clear previous results if no file is uploaded and no sample is selected
+        if not uploaded_file_lr and not st.session_state.lr_sample_file:
+            if st.session_state.lr_converted_content or 'lr_last_file_key' in st.session_state:
+                st.session_state.lr_converted_content = None
+                st.session_state.lr_conversion_log = "Ready to convert..."
+                st.session_state.lr_output_filename = None
+                if 'lr_last_file_key' in st.session_state:
+                    del st.session_state.lr_last_file_key
 
         if uploaded_file_lr:
             st.success(f"✅ File uploaded: {uploaded_file_lr.name} | Size: {uploaded_file_lr.size / 1024:.2f} KB")
