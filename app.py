@@ -985,6 +985,11 @@ Runtime Settings > Run Logic > Run:
                     # Format XML for better readability
                     content = format_xml_for_display(content)
 
+                    # Generate unique key based on file to force refresh
+                    import hashlib
+                    content_hash = hashlib.md5(content.encode()).hexdigest()[:8]
+                    editor_key = f"jmx_original_editor_{content_hash}"
+
                     # Use code_editor for enhanced display with full content
                     code_editor(
                         content,
@@ -1000,7 +1005,7 @@ Runtime Settings > Run Logic > Run:
                             "commands": ["copyAll"],
                             "style": {"top": "0.46rem", "right": "0.4rem"}
                         }],
-                        key="jmx_original_editor"
+                        key=editor_key
                     )
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
@@ -1008,6 +1013,11 @@ Runtime Settings > Run Logic > Run:
             with preview_col2:
                 st.markdown("**Converted LoadRunner C:**")
                 if st.session_state.jmx_converted_content:
+                    # Generate unique key based on content to force refresh
+                    import hashlib
+                    content_hash = hashlib.md5(st.session_state.jmx_converted_content.encode()).hexdigest()[:8]
+                    editor_key = f"jmx_converted_editor_{content_hash}"
+
                     # Use code_editor for enhanced display with full content
                     code_editor(
                         st.session_state.jmx_converted_content,
@@ -1033,7 +1043,7 @@ Runtime Settings > Run Logic > Run:
                             "commands": ["copyAll"],
                             "style": {"top": "0.46rem", "right": "0.4rem"}
                         }],
-                        key="jmx_converted_editor"
+                        key=editor_key
                     )
                 else:
                     code_editor(
@@ -1184,6 +1194,11 @@ Runtime Settings > Run Logic > Run:
                     # Format C code for better readability
                     content = format_c_for_display(content)
 
+                    # Generate unique key based on content to force refresh
+                    import hashlib
+                    content_hash = hashlib.md5(content.encode()).hexdigest()[:8]
+                    editor_key = f"lr_original_editor_{content_hash}"
+
                     # Use code_editor for enhanced display with full content
                     code_editor(
                         content,
@@ -1207,7 +1222,7 @@ Runtime Settings > Run Logic > Run:
                             "commands": ["copyAll"],
                             "style": {"top": "0.46rem", "right": "0.4rem"}
                         }],
-                        key="lr_original_editor"
+                        key=editor_key
                     )
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
@@ -1215,6 +1230,11 @@ Runtime Settings > Run Logic > Run:
             with preview_col2:
                 st.markdown("**Converted JMX:**")
                 if st.session_state.lr_converted_content:
+                    # Generate unique key based on content to force refresh
+                    import hashlib
+                    content_hash = hashlib.md5(st.session_state.lr_converted_content.encode()).hexdigest()[:8]
+                    editor_key = f"lr_converted_editor_{content_hash}"
+
                     # Use code_editor for enhanced display with full content
                     code_editor(
                         st.session_state.lr_converted_content,
@@ -1230,7 +1250,7 @@ Runtime Settings > Run Logic > Run:
                             "commands": ["copyAll"],
                             "style": {"top": "0.46rem", "right": "0.4rem"}
                         }],
-                        key="lr_converted_editor"
+                        key=editor_key
                     )
                 else:
                     code_editor(
