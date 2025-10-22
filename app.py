@@ -909,7 +909,7 @@ def main():
                         if var_data:
                             import pandas as pd
                             df = pd.DataFrame(var_data)
-                            st.dataframe(df, use_container_width=True, hide_index=True)
+                            st.dataframe(df, width='stretch', hide_index=True)
 
                         st.markdown("---")
 
