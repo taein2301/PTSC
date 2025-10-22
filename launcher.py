@@ -79,7 +79,34 @@ def main():
             time.sleep(3)
             url = "http://localhost:8501"
             print(f"\nOpening browser at {url}")
-            webbrowser.open(url)
+
+            # Try to open Chrome in a new window explicitly
+            try:
+                import subprocess
+                # Chrome with --new-window flag to force new window
+                chrome_path = None
+                possible_paths = [
+                    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                    os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+                    os.path.expandvars(r"%PROGRAMFILES%\Google\Chrome\Application\chrome.exe"),
+                    os.path.expandvars(r"%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe"),
+                ]
+
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        chrome_path = path
+                        break
+
+                if chrome_path:
+                    # Open in new window with --new-window flag
+                    subprocess.Popen([chrome_path, "--new-window", url])
+                else:
+                    # Fallback to default browser
+                    webbrowser.open(url, new=1)
+            except Exception as e:
+                print(f"Failed to open Chrome, using default browser: {e}")
+                webbrowser.open(url, new=1)
 
         browser_thread = threading.Thread(target=open_browser, daemon=True)
         browser_thread.start()
