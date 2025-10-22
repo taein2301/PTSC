@@ -806,11 +806,18 @@ def main():
         if uploaded_file or st.session_state.jmx_sample_file:
             # Check if we need to convert (file changed)
             if uploaded_file:
-                current_file_key = f"{uploaded_file.name}_{uploaded_file.size}"
+                current_file_key = f"{uploaded_file.name}_{uploaded_file.size}_{id(uploaded_file)}"
             else:
                 current_file_key = f"sample_{st.session_state.jmx_sample_file.get('name', 'unknown')}"
 
-            if 'jmx_last_file_key' not in st.session_state or st.session_state.jmx_last_file_key != current_file_key:
+            # Check if file has changed or no previous conversion exists
+            needs_conversion = (
+                'jmx_last_file_key' not in st.session_state or
+                st.session_state.jmx_last_file_key != current_file_key or
+                st.session_state.jmx_converted_content is None
+            )
+
+            if needs_conversion:
                 with st.spinner("Converting..."):
                     if uploaded_file:
                         uploaded_file.seek(0)  # Reset file pointer
@@ -1075,11 +1082,18 @@ Runtime Settings > Run Logic > Run:
         if uploaded_file_lr or st.session_state.lr_sample_file:
             # Check if we need to convert (file changed)
             if uploaded_file_lr:
-                current_file_key = f"{uploaded_file_lr.name}_{uploaded_file_lr.size}"
+                current_file_key = f"{uploaded_file_lr.name}_{uploaded_file_lr.size}_{id(uploaded_file_lr)}"
             else:
                 current_file_key = f"sample_{st.session_state.lr_sample_file.get('name', 'unknown')}"
 
-            if 'lr_last_file_key' not in st.session_state or st.session_state.lr_last_file_key != current_file_key:
+            # Check if file has changed or no previous conversion exists
+            needs_conversion = (
+                'lr_last_file_key' not in st.session_state or
+                st.session_state.lr_last_file_key != current_file_key or
+                st.session_state.lr_converted_content is None
+            )
+
+            if needs_conversion:
                 with st.spinner("Converting..."):
                     if uploaded_file_lr:
                         uploaded_file_lr.seek(0)  # Reset file pointer
