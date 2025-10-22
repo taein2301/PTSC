@@ -804,17 +804,21 @@ def main():
 
         # Auto-convert on file upload or sample file selection
         if uploaded_file or st.session_state.jmx_sample_file:
-            # Check if we need to convert (file changed)
+            # Generate unique file key based on content hash
             if uploaded_file:
-                current_file_key = f"{uploaded_file.name}_{uploaded_file.size}_{id(uploaded_file)}"
+                uploaded_file.seek(0)
+                import hashlib
+                file_content = uploaded_file.read()
+                file_hash = hashlib.md5(file_content).hexdigest()
+                current_file_key = f"{uploaded_file.name}_{uploaded_file.size}_{file_hash}"
+                uploaded_file.seek(0)  # Reset for later use
             else:
                 current_file_key = f"sample_{st.session_state.jmx_sample_file.get('name', 'unknown')}"
 
-            # Check if file has changed or no previous conversion exists
+            # Check if file has changed
             needs_conversion = (
                 'jmx_last_file_key' not in st.session_state or
-                st.session_state.jmx_last_file_key != current_file_key or
-                st.session_state.jmx_converted_content is None
+                st.session_state.jmx_last_file_key != current_file_key
             )
 
             if needs_conversion:
@@ -837,9 +841,9 @@ def main():
 
                     # Show message
                     if success:
-                        st.success("Conversion completed successfully!")
+                        st.success("✅ Conversion completed successfully!")
                     else:
-                        st.error("Conversion failed. Check logs for details.")
+                        st.error("❌ Conversion failed. Check logs for details.")
                     st.rerun()
 
         # Action buttons
@@ -1080,17 +1084,21 @@ Runtime Settings > Run Logic > Run:
 
         # Auto-convert on file upload or sample file selection
         if uploaded_file_lr or st.session_state.lr_sample_file:
-            # Check if we need to convert (file changed)
+            # Generate unique file key based on content hash
             if uploaded_file_lr:
-                current_file_key = f"{uploaded_file_lr.name}_{uploaded_file_lr.size}_{id(uploaded_file_lr)}"
+                uploaded_file_lr.seek(0)
+                import hashlib
+                file_content = uploaded_file_lr.read()
+                file_hash = hashlib.md5(file_content).hexdigest()
+                current_file_key = f"{uploaded_file_lr.name}_{uploaded_file_lr.size}_{file_hash}"
+                uploaded_file_lr.seek(0)  # Reset for later use
             else:
                 current_file_key = f"sample_{st.session_state.lr_sample_file.get('name', 'unknown')}"
 
-            # Check if file has changed or no previous conversion exists
+            # Check if file has changed
             needs_conversion = (
                 'lr_last_file_key' not in st.session_state or
-                st.session_state.lr_last_file_key != current_file_key or
-                st.session_state.lr_converted_content is None
+                st.session_state.lr_last_file_key != current_file_key
             )
 
             if needs_conversion:
@@ -1113,9 +1121,9 @@ Runtime Settings > Run Logic > Run:
 
                     # Show message
                     if success:
-                        st.success("Conversion completed successfully!")
+                        st.success("✅ Conversion completed successfully!")
                     else:
-                        st.error("Conversion failed. Check logs for details.")
+                        st.error("❌ Conversion failed. Check logs for details.")
                     st.rerun()
 
         # Action buttons
