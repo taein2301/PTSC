@@ -15,27 +15,37 @@ def main():
     # Get the directory where this script is located
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
-        application_path = Path(sys.executable).parent
+        # PyInstaller extracts files to sys._MEIPASS
+        if hasattr(sys, '_MEIPASS'):
+            # Files are in the temporary _MEIPASS folder
+            application_path = Path(sys._MEIPASS)
+        else:
+            # Fallback to executable directory
+            application_path = Path(sys.executable).parent
     else:
         # Running as script
         application_path = Path(__file__).parent
 
-    # Change to application directory
-    os.chdir(application_path)
-
     # Set up environment
     app_file = application_path / "app.py"
 
-    if not app_file.exists():
-        print(f"Error: app.py not found at {app_file}")
-        input("Press Enter to exit...")
-        sys.exit(1)
-
-    # Launch Streamlit
     print("=" * 80)
     print("Performance Test Script Converter (PTSC)")
     print("=" * 80)
     print(f"Application path: {application_path}")
+    print(f"Looking for app.py at: {app_file}")
+    print(f"File exists: {app_file.exists()}")
+
+    if not app_file.exists():
+        print(f"\nError: app.py not found!")
+        print(f"Searched at: {app_file}")
+        print(f"\nDirectory contents:")
+        for item in application_path.iterdir():
+            print(f"  - {item.name}")
+        input("\nPress Enter to exit...")
+        sys.exit(1)
+
+    # Launch Streamlit
     print(f"Starting Streamlit server...")
     print("=" * 80)
 
