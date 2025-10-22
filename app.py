@@ -821,6 +821,12 @@ def main():
                 st.session_state.jmx_last_file_key != current_file_key
             )
 
+            # Clear previous results immediately when file changes
+            if needs_conversion:
+                st.session_state.jmx_converted_content = None
+                st.session_state.jmx_conversion_log = "Converting..."
+                st.session_state.jmx_output_filename = None
+
             if needs_conversion:
                 with st.spinner("Converting..."):
                     if uploaded_file:
@@ -1100,6 +1106,12 @@ Runtime Settings > Run Logic > Run:
                 'lr_last_file_key' not in st.session_state or
                 st.session_state.lr_last_file_key != current_file_key
             )
+
+            # Clear previous results immediately when file changes
+            if needs_conversion:
+                st.session_state.lr_converted_content = None
+                st.session_state.lr_conversion_log = "Converting..."
+                st.session_state.lr_output_filename = None
 
             if needs_conversion:
                 with st.spinner("Converting..."):
