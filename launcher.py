@@ -8,10 +8,42 @@ import subprocess
 import webbrowser
 import time
 from pathlib import Path
+import multiprocessing
+
+
+def find_python_executable():
+    """Find the Python interpreter executable"""
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller bundle
+        # Need to find the bundled Python interpreter
+        if sys.platform == 'win32':
+            # On Windows, look for python.exe in the bundle
+            bundle_dir = Path(sys._MEIPASS)
+            python_paths = [
+                bundle_dir / 'python.exe',
+                bundle_dir / 'python' / 'python.exe',
+                Path(sys.executable).parent / 'python.exe',
+            ]
+            for python_path in python_paths:
+                if python_path.exists():
+                    return str(python_path)
+
+            # If not found, use pythonw to avoid console window
+            # This assumes Python is in PATH
+            return 'pythonw'
+        else:
+            return 'python3'
+    else:
+        # Running as script, use current interpreter
+        return sys.executable
 
 
 def main():
     """Launch the Streamlit application"""
+    # CRITICAL: Prevent infinite recursion when frozen
+    if getattr(sys, 'frozen', False):
+        multiprocessing.freeze_support()
+
     # Get the directory where this script is located
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
@@ -35,6 +67,7 @@ def main():
     print(f"Application path: {application_path}")
     print(f"Looking for app.py at: {app_file}")
     print(f"File exists: {app_file.exists()}")
+    print(f"Frozen: {getattr(sys, 'frozen', False)}")
 
     if not app_file.exists():
         print(f"\nError: app.py not found!")
@@ -45,6 +78,10 @@ def main():
         input("\nPress Enter to exit...")
         sys.exit(1)
 
+    # Find Python executable
+    python_exe = find_python_executable()
+    print(f"Python executable: {python_exe}")
+
     # Launch Streamlit
     print(f"Starting Streamlit server...")
     print("=" * 80)
@@ -53,7 +90,7 @@ def main():
     try:
         # Run streamlit with specific port and headless mode
         cmd = [
-            sys.executable,
+            python_exe,
             "-m", "streamlit", "run",
             str(app_file),
             "--server.port=8501",
@@ -70,7 +107,8 @@ def main():
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
-            bufsize=1
+            bufsize=1,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0
         )
 
         # Wait a bit for server to start
