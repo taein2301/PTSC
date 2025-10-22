@@ -1,21 +1,29 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+from pathlib import Path
 
 block_cipher = None
+
+# Collect data files (only if they exist)
+datas = [
+    ('app.py', '.'),
+    ('converters', 'converters'),
+    ('parsers', 'parsers'),
+    ('generators', 'generators'),
+    ('utils', 'utils'),
+    ('samples', 'samples'),
+]
+
+# Add .streamlit folder if it exists
+if Path('.streamlit').exists():
+    datas.append(('.streamlit', '.streamlit'))
 
 # Collect all necessary files
 a = Analysis(
     ['launcher.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        ('app.py', '.'),
-        ('converters', 'converters'),
-        ('parsers', 'parsers'),
-        ('generators', 'generators'),
-        ('utils', 'utils'),
-        ('samples', 'samples'),
-        ('.streamlit', '.streamlit'),
-    ],
+    datas=datas,
     hiddenimports=[
         'streamlit',
         'streamlit.runtime',
