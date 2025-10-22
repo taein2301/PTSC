@@ -54,3 +54,10 @@ coverage.xml
 
 # OS
 Thumbs.db
+
+# PyInstaller build outputs
+build/
+dist/
+*.manifest
+# Keep .spec files in repo
+!PTSC.spec
