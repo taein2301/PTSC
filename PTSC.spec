@@ -18,6 +18,19 @@ datas = [
 if Path('.streamlit').exists():
     datas.append(('.streamlit', '.streamlit'))
 
+# Collect package metadata for streamlit and other packages
+from PyInstaller.utils.hooks import copy_metadata, collect_data_files
+datas += copy_metadata('streamlit')
+datas += copy_metadata('altair')
+datas += copy_metadata('click')
+datas += copy_metadata('toml')
+
+# Collect streamlit static files (required for web UI)
+datas += collect_data_files('streamlit', include_py_files=False)
+
+# Collect code_editor component files (frontend build)
+datas += collect_data_files('code_editor', include_py_files=False)
+
 # Collect all necessary files
 a = Analysis(
     ['launcher.py'],
@@ -28,6 +41,7 @@ a = Analysis(
         'streamlit',
         'streamlit.runtime',
         'streamlit.runtime.scriptrunner',
+        'streamlit.runtime.scriptrunner.magic_funcs',
         'streamlit.web',
         'streamlit.web.cli',
         'code_editor',

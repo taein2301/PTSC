@@ -4,45 +4,17 @@ Launches the Streamlit application
 """
 import sys
 import os
-import subprocess
 import webbrowser
 import time
 from pathlib import Path
 import multiprocessing
-
-
-def find_python_executable():
-    """Find the Python interpreter executable"""
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller bundle
-        # Need to find the bundled Python interpreter
-        if sys.platform == 'win32':
-            # On Windows, look for python.exe in the bundle
-            bundle_dir = Path(sys._MEIPASS)
-            python_paths = [
-                bundle_dir / 'python.exe',
-                bundle_dir / 'python' / 'python.exe',
-                Path(sys.executable).parent / 'python.exe',
-            ]
-            for python_path in python_paths:
-                if python_path.exists():
-                    return str(python_path)
-
-            # If not found, use pythonw to avoid console window
-            # This assumes Python is in PATH
-            return 'pythonw'
-        else:
-            return 'python3'
-    else:
-        # Running as script, use current interpreter
-        return sys.executable
+import threading
 
 
 def main():
     """Launch the Streamlit application"""
     # CRITICAL: Prevent infinite recursion when frozen
-    if getattr(sys, 'frozen', False):
-        multiprocessing.freeze_support()
+    multiprocessing.freeze_support()
 
     # Get the directory where this script is located
     if getattr(sys, 'frozen', False):
@@ -78,60 +50,51 @@ def main():
         input("\nPress Enter to exit...")
         sys.exit(1)
 
-    # Find Python executable
-    python_exe = find_python_executable()
-    print(f"Python executable: {python_exe}")
-
     # Launch Streamlit
     print(f"Starting Streamlit server...")
     print("=" * 80)
 
-    # Start Streamlit in subprocess
     try:
-        # Run streamlit with specific port and headless mode
-        cmd = [
-            python_exe,
-            "-m", "streamlit", "run",
+        # Import streamlit CLI
+        from streamlit.web import cli as stcli
+
+        # Set environment variables to configure Streamlit
+        os.environ['STREAMLIT_SERVER_PORT'] = '8501'
+        os.environ['STREAMLIT_SERVER_HEADLESS'] = 'true'
+        os.environ['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
+        os.environ['STREAMLIT_GLOBAL_DEVELOPMENT_MODE'] = 'false'
+
+        # Prepare arguments (simpler, let environment vars handle config)
+        sys.argv = [
+            "streamlit",
+            "run",
             str(app_file),
-            "--server.port=8501",
-            "--server.headless=true",
-            "--browser.gatherUsageStats=false"
         ]
 
-        print(f"Command: {' '.join(cmd)}")
+        print(f"Arguments: {' '.join(sys.argv)}")
         print("=" * 80)
 
-        # Start the process
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-            bufsize=1,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0
-        )
+        # Open browser in a separate thread after a delay
+        def open_browser():
+            time.sleep(3)
+            url = "http://localhost:8501"
+            print(f"\nOpening browser at {url}")
+            webbrowser.open(url)
 
-        # Wait a bit for server to start
-        time.sleep(3)
-
-        # Open browser
-        url = "http://localhost:8501"
-        print(f"\nOpening browser at {url}")
-        webbrowser.open(url)
+        browser_thread = threading.Thread(target=open_browser, daemon=True)
+        browser_thread.start()
 
         print("\n" + "=" * 80)
         print("Application is running!")
-        print("Close this window to stop the application.")
+        print("Press Ctrl+C to stop the application.")
         print("=" * 80 + "\n")
 
-        # Keep reading output
-        for line in process.stdout:
-            print(line.strip())
+        # Run Streamlit
+        sys.exit(stcli.main())
 
     except KeyboardInterrupt:
         print("\n\nShutting down...")
-        process.terminate()
-        process.wait()
+        sys.exit(0)
     except Exception as e:
         print(f"\nError: {e}")
         import traceback
