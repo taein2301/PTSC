@@ -139,10 +139,24 @@ st.markdown("""
     [data-testid="stSidebar"] [data-testid="stExpander"] summary {
         color: #1E1E1E !important;
         font-weight: 600;
+        background-color: #F8F8F8 !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
+        background-color: #EEEEEE !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary p {
+        color: #1E1E1E !important;
     }
     [data-testid="stSidebar"] [data-testid="stExpander"] p,
-    [data-testid="stSidebar"] [data-testid="stExpander"] li {
+    [data-testid="stSidebar"] [data-testid="stExpander"] li,
+    [data-testid="stSidebar"] [data-testid="stExpander"] label {
         color: #333333 !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] div[class*="streamlit-expanderHeader"] {
+        background-color: #F8F8F8 !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] div[class*="streamlit-expanderHeader"] p {
+        color: #1E1E1E !important;
     }
     /* Main content background */
     .main {
@@ -159,8 +173,21 @@ st.markdown("""
     [data-testid="stSidebar"] h4 {
         color: #1E1E1E !important;
     }
-    [data-testid="stSidebar"] p {
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] label {
         color: #333333 !important;
+    }
+    /* Sidebar form elements */
+    [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stSlider label,
+    [data-testid="stSidebar"] .stCheckbox label {
+        color: #1E1E1E !important;
+    }
+    [data-testid="stSidebar"] select,
+    [data-testid="stSidebar"] input {
+        color: #1E1E1E !important;
+        background-color: #FFFFFF !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -681,42 +708,56 @@ def main():
     # Version info in sidebar
     with st.sidebar:
         st.markdown("### ⚙️ Conversion Settings")
+        st.markdown("변환 시 적용될 설정을 미리 구성합니다. (향후 구현 예정)")
+
         with st.expander("Code Formatting", expanded=False):
+            st.markdown("**생성되는 코드의 포맷 설정**")
             st.session_state.indent_size = st.select_slider(
                 "Indentation Size",
                 options=[2, 4, 8],
                 value=st.session_state.indent_size,
-                help="Number of spaces for indentation (currently informational)"
+                help="코드 들여쓰기에 사용할 스페이스 개수"
             )
 
             st.session_state.include_comments = st.checkbox(
                 "Include Descriptive Comments",
                 value=st.session_state.include_comments,
-                help="Add explanatory comments in generated code (currently informational)"
+                help="변환된 코드에 설명 주석 추가"
             )
 
         with st.expander("Error Handling", expanded=False):
+            st.markdown("**에러 처리 수준 설정**")
             st.session_state.error_handling_level = st.selectbox(
                 "Error Handling Level",
                 options=['Minimal', 'Standard', 'Verbose'],
                 index=['Minimal', 'Standard', 'Verbose'].index(st.session_state.error_handling_level),
-                help="Level of error handling in converted scripts (currently informational)"
+                help="생성되는 스크립트의 에러 처리 상세 정도"
             )
+            st.caption("• **Minimal**: 필수 에러 처리만 포함")
+            st.caption("• **Standard**: 표준 에러 처리 포함")
+            st.caption("• **Verbose**: 상세한 에러 로깅 포함")
 
-        st.info("💡 **Note:** Settings are ready for future implementation. Current conversions use default values.")
+        st.info("💡 **참고**: 위 설정은 UI만 구현되어 있으며, 실제 변환에는 아직 적용되지 않습니다.")
 
         st.markdown("---")
         st.markdown("### ℹ️ About")
         st.info("""
-        **Version:** 0.2.2
+        **Version:** 0.3.0
 
-        **Features:**
-        - JMeter → LoadRunner conversion
-        - LoadRunner → JMeter conversion
-        - Sample file loading
-        - Code preview with syntax highlighting
-        - Conversion logs and statistics
-        - File validation
+        **주요 기능:**
+        - JMeter → LoadRunner 변환
+        - LoadRunner → JMeter 변환
+        - 샘플 파일 로딩
+        - 코드 미리보기 (문법 강조)
+        - 변환 로그 및 통계
+        - 파일 유효성 검사
+
+        **지원 요소:**
+        - HTTP 요청 (GET, POST, PUT, DELETE)
+        - 상관관계 (Correlation)
+        - 트랜잭션 (Transactions)
+        - Think Time / 타이머
+        - 헤더 / 쿠키 관리
         """)
 
         st.markdown("---")
