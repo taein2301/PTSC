@@ -6,6 +6,9 @@ import sys
 import os
 import webbrowser
 import time
+import subprocess
+import tempfile
+import shutil
 from pathlib import Path
 import multiprocessing
 import threading
@@ -74,22 +77,21 @@ def main():
         print(f"Arguments: {' '.join(sys.argv)}")
         print("=" * 80)
 
-        # Shared variable to track browser process
+        # Shared variables to track browser process
         chrome_process = None
-        streamlit_thread = None
+        chrome_user_data_dir = None
         should_exit = threading.Event()
 
         # Open browser in a separate thread after a delay
         def open_browser():
-            nonlocal chrome_process
+            nonlocal chrome_process, chrome_user_data_dir
             time.sleep(3)
             url = "http://localhost:8501"
             print(f"\nOpening browser at {url}")
 
             # Try to open Chrome in a new window explicitly
             try:
-                import subprocess
-                # Chrome with --new-window flag to force new window
+                # Chrome with --app mode for standalone window and separate profile
                 chrome_path = None
                 possible_paths = [
                     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -105,9 +107,19 @@ def main():
                         break
 
                 if chrome_path:
-                    # Open in new window with --new-window flag and track the process
-                    chrome_process = subprocess.Popen([chrome_path, "--new-window", url])
-                    print("Chrome opened successfully. Monitoring browser...")
+                    # Create temporary user-data-dir for isolated Chrome instance
+                    chrome_user_data_dir = tempfile.mkdtemp(prefix="ptsc_chrome_")
+
+                    # Open in app mode with isolated profile to ensure separate process
+                    chrome_process = subprocess.Popen(
+                        [
+                            chrome_path,
+                            f"--user-data-dir={chrome_user_data_dir}",
+                            f"--app={url}",
+                            "--new-window"
+                        ]
+                    )
+                    print("Chrome opened in app mode. Monitoring browser...")
                 else:
                     # Fallback to default browser
                     webbrowser.open(url, new=1)
@@ -117,13 +129,22 @@ def main():
 
         # Monitor Chrome process - exit when Chrome closes
         def monitor_browser():
-            nonlocal chrome_process
+            nonlocal chrome_process, chrome_user_data_dir
             if chrome_process:
                 try:
                     # Wait for Chrome process to exit
                     chrome_process.wait()
                     print("\n\nBrowser closed. Shutting down application...")
                     should_exit.set()
+
+                    # Cleanup temporary Chrome profile directory
+                    if chrome_user_data_dir and os.path.exists(chrome_user_data_dir):
+                        try:
+                            shutil.rmtree(chrome_user_data_dir, ignore_errors=True)
+                            print(f"Cleaned up Chrome profile: {chrome_user_data_dir}")
+                        except Exception as cleanup_err:
+                            print(f"Warning: Cleanup failed: {cleanup_err}")
+
                     # Force exit
                     os._exit(0)
                 except Exception as e:
