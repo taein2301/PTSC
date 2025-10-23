@@ -197,9 +197,6 @@ if 'error_handling_level' not in st.session_state:
     st.session_state.error_handling_level = 'Standard'
 
 
-# Conversion history
-if 'conversion_history' not in st.session_state:
-    st.session_state.conversion_history = []
 
 # Comparison mode state
 if 'compare_content_left' not in st.session_state:
@@ -484,22 +481,6 @@ def load_sample_file(file_path):
         return None
 
 
-def add_to_history(direction, filename, success, message):
-    """Add conversion attempt to history"""
-    import datetime
-    history_entry = {
-        'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'direction': direction,
-        'filename': filename,
-        'success': success,
-        'message': message[:200]  # Truncate long messages
-    }
-    st.session_state.conversion_history.insert(0, history_entry)
-    # Keep only last 50 entries
-    if len(st.session_state.conversion_history) > 50:
-        st.session_state.conversion_history = st.session_state.conversion_history[:50]
-
-
 def convert_jmx_to_lr(uploaded_file=None, content_str=None, filename=None):
     """
     Convert JMeter JMX file to LoadRunner C script
@@ -742,73 +723,6 @@ def main():
         st.markdown("### 📚 Documentation")
         st.markdown("[GitHub Repository](https://github.com/taein2301/PTSC)")
 
-        # Conversion History
-        st.markdown("---")
-        st.markdown("### 📜 Conversion History")
-
-        if st.session_state.conversion_history:
-            # Filter options
-            filter_direction = st.selectbox(
-                "Filter by direction:",
-                options=["All", "JMeter → LoadRunner", "LoadRunner → JMeter"],
-                key="history_filter"
-            )
-
-            # Filter history
-            filtered_history = st.session_state.conversion_history
-            if filter_direction != "All":
-                filtered_history = [h for h in st.session_state.conversion_history if h['direction'] == filter_direction]
-
-            # Display history (max 10 recent items)
-            display_count = min(10, len(filtered_history))
-
-            for i, entry in enumerate(filtered_history[:display_count]):
-                status_icon = "✅" if entry['success'] else "❌"
-                direction_icon = "🔵" if "JMeter" in entry['direction'].split()[0] else "🟢"
-
-                with st.expander(f"{status_icon} {direction_icon} {entry['filename']} - {entry['timestamp']}", expanded=False):
-                    st.text(f"Direction: {entry['direction']}")
-                    st.text(f"Status: {'Success' if entry['success'] else 'Failed'}")
-                    st.text(f"Time: {entry['timestamp']}")
-
-                    # Show message preview
-                    message_preview = entry['message'][:150] + "..." if len(entry['message']) > 150 else entry['message']
-                    st.text_area("Log Preview:", message_preview, height=80, disabled=True, key=f"history_msg_{i}")
-
-            if len(filtered_history) > display_count:
-                st.info(f"Showing {display_count} of {len(filtered_history)} entries")
-
-            # Clear history button
-            if st.button("🗑️ Clear History", key="clear_history"):
-                st.session_state.conversion_history = []
-                st.rerun()
-        else:
-            st.info("No conversion history yet. Start converting files to see history here.")
-
-        st.markdown("---")
-        st.markdown("### 🔧 Supported Elements")
-        with st.expander("JMeter Elements"):
-            st.markdown("""
-            - HTTP Samplers (GET, POST, PUT, DELETE)
-            - Thread Groups
-            - Header Manager
-            - Cookie Manager
-            - RegexExtractor
-            - JSON Extractor
-            - Constant Timer
-            - Transaction Controller
-            """)
-        with st.expander("LoadRunner Functions"):
-            st.markdown("""
-            - web_url()
-            - web_submit_data()
-            - web_custom_request()
-            - web_reg_save_param()
-            - web_reg_save_param_json()
-            - lr_think_time()
-            - lr_start/end_transaction()
-            """)
-
     # Main conversion tabs
     tab1, tab2 = st.tabs(["🔵 JMeter → LoadRunner", "🟢 LoadRunner → JMeter"])
 
@@ -884,9 +798,6 @@ def main():
                     st.session_state.jmx_converted_content = output if success else None
                     st.session_state.jmx_conversion_log = log_msg
                     st.session_state.jmx_last_file_key = current_file_key
-
-                    # Add to history
-                    add_to_history("JMeter → LoadRunner", file_name, success, log_msg)
 
                     # Show message
                     if success:
@@ -1180,9 +1091,6 @@ Runtime Settings > Run Logic > Run:
                     st.session_state.lr_converted_content = output if success else None
                     st.session_state.lr_conversion_log = log_msg
                     st.session_state.lr_last_file_key = current_file_key
-
-                    # Add to history
-                    add_to_history("LoadRunner → JMeter", file_name, success, log_msg)
 
                     # Show message
                     if success:
