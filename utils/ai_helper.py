@@ -86,7 +86,8 @@ class GeminiHelper:
                           stats: Dict[str, Any],
                           warnings: list,
                           errors: list,
-                          converted_content: str = None) -> str:
+                          converted_content: str = None,
+                          stream: bool = False):
         """
         Analyze conversion results and provide AI summary
 
@@ -97,16 +98,27 @@ class GeminiHelper:
             warnings: List of warning messages
             errors: List of error messages
             converted_content: Optional converted script content (first 500 chars)
+            stream: If True, return generator for streaming response
 
         Returns:
-            AI-generated summary and recommendations
+            AI-generated summary and recommendations (str or generator)
         """
         if not self.is_available():
-            return "⚠️ Gemini API를 사용할 수 없습니다. GEMINI_API_KEY 환경 변수를 설정해주세요."
+            error_msg = "⚠️ Gemini API를 사용할 수 없습니다. GEMINI_API_KEY 환경 변수를 설정해주세요."
+            if stream:
+                yield error_msg
+                return
+            else:
+                return error_msg
 
         # Check network connection first
         if not self._check_network_connection():
-            return "⚠️ 네트워크 연결이 없습니다. AI 요약 기능을 사용할 수 없습니다."
+            error_msg = "⚠️ 네트워크 연결이 없습니다. AI 요약 기능을 사용할 수 없습니다."
+            if stream:
+                yield error_msg
+                return
+            else:
+                return error_msg
 
         try:
             # Prepare conversion summary
@@ -123,7 +135,12 @@ class GeminiHelper:
             # Get prompt template from file
             prompt_template = self.prompts.get('conversion_analysis', '')
             if not prompt_template:
-                return "⚠️ AI 프롬프트를 로드할 수 없습니다."
+                error_msg = "⚠️ AI 프롬프트를 로드할 수 없습니다."
+                if stream:
+                    yield error_msg
+                    return
+                else:
+                    return error_msg
 
             # Format prompt with actual values
             warning_list = '\n'.join(['- ' + w for w in warnings[:5]])
@@ -143,16 +160,25 @@ class GeminiHelper:
                 content_preview=content_preview
             )
 
-            # Call Gemini API
-            response = self.model.generate_content(prompt)
-
-            if response and response.text:
-                return response.text.strip()
+            # Call Gemini API with streaming if requested
+            if stream:
+                response = self.model.generate_content(prompt, stream=True)
+                for chunk in response:
+                    if chunk.text:
+                        yield chunk.text
             else:
-                return "AI 분석 결과를 생성할 수 없습니다."
+                response = self.model.generate_content(prompt)
+                if response and response.text:
+                    return response.text.strip()
+                else:
+                    return "AI 분석 결과를 생성할 수 없습니다."
 
         except Exception as e:
-            return f"AI 분석 중 오류 발생: {str(e)}"
+            error_msg = f"AI 분석 중 오류 발생: {str(e)}"
+            if stream:
+                yield error_msg
+            else:
+                return error_msg
 
     def get_conversion_tips(self, source_type: str, target_type: str) -> str:
         """

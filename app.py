@@ -9,6 +9,8 @@ This application provides bidirectional conversion between:
 
 import streamlit as st
 import os
+from datetime import datetime
+from dotenv import load_dotenv
 from code_editor import code_editor
 from converters.jmeter_to_lr import JMeterToLRConverter
 from converters.lr_to_jmeter import LRToJMeterConverter
@@ -16,6 +18,27 @@ from utils.validators import FileValidator
 from utils.formatters import CodeFormatter
 from utils.helpers import FileHelper
 from utils.comparator import ScriptComparator, ChangeType
+from utils.ai_helper import GeminiHelper
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Version information (수동 관리)
+VERSION_MAJOR = "0"  # 주 버전 (Major release)
+VERSION_MINOR = "3"  # 부 버전 (Minor release)
+VERSION_BUILD = "0"  # 빌드 번호 (git push 시마다 +1)
+
+# Get build date from file modification time
+def get_build_date():
+    try:
+        file_path = __file__
+        mod_time = os.path.getmtime(file_path)
+        return datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M:%S")
+    except:
+        return "Unknown"
+
+VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_BUILD}"
+BUILD_DATE = get_build_date()
 
 # Page configuration
 st.set_page_config(
@@ -201,6 +224,10 @@ if 'jmx_output_filename' not in st.session_state:
     st.session_state.jmx_output_filename = None
 if 'jmx_sample_file' not in st.session_state:
     st.session_state.jmx_sample_file = None
+if 'jmx_ai_summary' not in st.session_state:
+    st.session_state.jmx_ai_summary = ""
+if 'jmx_conversion_stats' not in st.session_state:
+    st.session_state.jmx_conversion_stats = None
 if 'jmx_uploader_key' not in st.session_state:
     st.session_state.jmx_uploader_key = 0
 
@@ -212,6 +239,10 @@ if 'lr_output_filename' not in st.session_state:
     st.session_state.lr_output_filename = None
 if 'lr_sample_file' not in st.session_state:
     st.session_state.lr_sample_file = None
+if 'lr_ai_summary' not in st.session_state:
+    st.session_state.lr_ai_summary = ""
+if 'lr_conversion_stats' not in st.session_state:
+    st.session_state.lr_conversion_stats = None
 if 'lr_uploader_key' not in st.session_state:
     st.session_state.lr_uploader_key = 0
 
@@ -560,6 +591,22 @@ def convert_jmx_to_lr(uploaded_file=None, content_str=None, filename=None):
             output_filename = FileHelper.generate_output_filename(file_name, '.c')
             st.session_state.jmx_output_filename = output_filename
 
+            # Store stats for AI summary
+            st.session_state.jmx_conversion_stats = {
+                'stats': stats,
+                'output_content': output_content,
+                'source_type': 'JMeter',
+                'target_type': 'LoadRunner'
+            }
+
+            # Store stats for AI summary (generated later)
+            st.session_state.jmx_ai_stats = {
+                'stats': stats.get('stats', {}),
+                'warnings': stats.get('warnings', []),
+                'errors': stats.get('errors', []),
+                'converted_content': output_content
+            }
+
             return True, output_content, log_msg
         else:
             errors = stats.get('errors', [])
@@ -656,6 +703,22 @@ def convert_lr_to_jmx(uploaded_file=None, content_str=None, filename=None):
             output_filename = FileHelper.generate_output_filename(file_name, '.jmx')
             st.session_state.lr_output_filename = output_filename
 
+            # Store stats for AI summary
+            st.session_state.lr_conversion_stats = {
+                'stats': stats,
+                'output_content': output_content,
+                'source_type': 'LoadRunner',
+                'target_type': 'JMeter'
+            }
+
+            # Store stats for AI summary (generated later)
+            st.session_state.lr_ai_stats = {
+                'stats': stats.get('stats', {}),
+                'warnings': stats.get('warnings', []),
+                'errors': stats.get('errors', []),
+                'converted_content': output_content
+            }
+
             return True, output_content, log_msg
         else:
             errors = stats.get('errors', [])
@@ -708,50 +771,25 @@ def main():
     # Version info in sidebar
     with st.sidebar:
         st.markdown("### ⚙️ Conversion Settings")
-        st.markdown("변환 시 적용될 설정을 미리 구성합니다. (향후 구현 예정)")
 
-        with st.expander("Code Formatting", expanded=False):
-            st.markdown("**생성되는 코드의 포맷 설정**")
-            st.session_state.include_comments = st.checkbox(
-                "Include Descriptive Comments",
-                value=st.session_state.include_comments,
-                help="변환된 코드에 설명 주석 추가 (권장)"
-            )
-            st.caption("✅ 주석을 포함하면 변환된 코드를 이해하기 쉽습니다.")
-
-        with st.expander("Error Handling", expanded=False):
-            st.markdown("**에러 처리 수준 설정**")
-            st.session_state.error_handling_level = st.selectbox(
-                "Error Handling Level",
-                options=['Minimal', 'Standard', 'Verbose'],
-                index=['Minimal', 'Standard', 'Verbose'].index(st.session_state.error_handling_level),
-                help="생성되는 스크립트의 에러 처리 상세 정도"
-            )
-            st.caption("• **Minimal**: 필수 에러 처리만 포함")
-            st.caption("• **Standard**: 표준 에러 처리 포함")
-            st.caption("• **Verbose**: 상세한 에러 로깅 포함")
-
-        st.info("💡 **참고**: Include Comments는 실제 적용됩니다. Error Handling은 향후 구현 예정입니다.")
+        st.session_state.include_comments = st.checkbox(
+            "Include Descriptive Comments",
+            value=st.session_state.include_comments,
+            help="변환된 코드에 설명 주석 추가"
+        )
 
         st.markdown("---")
         st.markdown("### ℹ️ About")
-        st.info("""
-        **Version:** 0.3.0
-
-        **주요 기능:**
-        - JMeter → LoadRunner 변환
-        - LoadRunner → JMeter 변환
-        - 샘플 파일 로딩
-        - 코드 미리보기 (문법 강조)
-        - 변환 로그 및 통계
-        - 파일 유효성 검사
+        st.info(f"""
+        **Version:** {VERSION}
+        **Build:** {BUILD_DATE}
 
         **지원 요소:**
         - HTTP 요청 (GET, POST, PUT, DELETE)
         - 상관관계 (Correlation)
         - 트랜잭션 (Transactions)
-        - Think Time / 타이머
-        - 헤더 / 쿠키 관리
+        - Think Time
+        - 헤더
         """)
 
         st.markdown("---")
@@ -1054,6 +1092,54 @@ Runtime Settings > Run Logic > Run:
             label_visibility="collapsed"
         )
 
+        # AI Summary section - show only after conversion
+        st.markdown("---")
+        st.markdown("### 🤖 AI 요약")
+
+        if st.session_state.jmx_converted_content:
+            # Check if we need to generate AI summary
+            if 'jmx_ai_stats' in st.session_state and not st.session_state.get('jmx_ai_summary'):
+                # Show placeholder for streaming
+                ai_placeholder = st.empty()
+
+                try:
+                    gemini_helper = GeminiHelper()
+                    if gemini_helper.is_available():
+                        # Stream AI response
+                        ai_text = ""
+                        stats_data = st.session_state.jmx_ai_stats
+                        for chunk in gemini_helper.analyze_conversion(
+                            source_type='JMeter',
+                            target_type='LoadRunner',
+                            stats=stats_data['stats'],
+                            warnings=stats_data['warnings'],
+                            errors=stats_data['errors'],
+                            converted_content=stats_data['converted_content'],
+                            stream=True
+                        ):
+                            ai_text += chunk
+                            ai_placeholder.info(ai_text)
+
+                        # Save final result
+                        st.session_state.jmx_ai_summary = ai_text
+                        del st.session_state.jmx_ai_stats
+                    else:
+                        st.session_state.jmx_ai_summary = ""
+                        ai_placeholder.warning("AI 요약을 사용하려면 GEMINI_API_KEY 환경 변수를 설정하세요. ([설정 방법](https://makersuite.google.com/app/apikey))")
+                        del st.session_state.jmx_ai_stats
+                except Exception as e:
+                    st.session_state.jmx_ai_summary = f"AI 요약 생성 실패: {str(e)}"
+                    ai_placeholder.error(st.session_state.jmx_ai_summary)
+                    if 'jmx_ai_stats' in st.session_state:
+                        del st.session_state.jmx_ai_stats
+            elif st.session_state.get('jmx_ai_summary'):
+                # Show already generated summary
+                st.info(st.session_state.jmx_ai_summary)
+            else:
+                st.warning("AI 요약을 사용하려면 GEMINI_API_KEY 환경 변수를 설정하세요. ([설정 방법](https://makersuite.google.com/app/apikey))")
+        else:
+            st.info("파일을 업로드하고 변환을 실행하면 AI 요약이 여기에 표시됩니다.")
+
     with tab2:
         st.markdown("### Convert LoadRunner C Script to JMeter JMX")
 
@@ -1257,6 +1343,54 @@ Runtime Settings > Run Logic > Run:
             disabled=True,
             label_visibility="collapsed"
         )
+
+        # AI Summary section - show only after conversion
+        st.markdown("---")
+        st.markdown("### 🤖 AI 요약")
+
+        if st.session_state.lr_converted_content:
+            # Check if we need to generate AI summary
+            if 'lr_ai_stats' in st.session_state and not st.session_state.get('lr_ai_summary'):
+                # Show placeholder for streaming
+                ai_placeholder = st.empty()
+
+                try:
+                    gemini_helper = GeminiHelper()
+                    if gemini_helper.is_available():
+                        # Stream AI response
+                        ai_text = ""
+                        stats_data = st.session_state.lr_ai_stats
+                        for chunk in gemini_helper.analyze_conversion(
+                            source_type='LoadRunner',
+                            target_type='JMeter',
+                            stats=stats_data['stats'],
+                            warnings=stats_data['warnings'],
+                            errors=stats_data['errors'],
+                            converted_content=stats_data['converted_content'],
+                            stream=True
+                        ):
+                            ai_text += chunk
+                            ai_placeholder.info(ai_text)
+
+                        # Save final result
+                        st.session_state.lr_ai_summary = ai_text
+                        del st.session_state.lr_ai_stats
+                    else:
+                        st.session_state.lr_ai_summary = ""
+                        ai_placeholder.warning("AI 요약을 사용하려면 GEMINI_API_KEY 환경 변수를 설정하세요. ([설정 방법](https://makersuite.google.com/app/apikey))")
+                        del st.session_state.lr_ai_stats
+                except Exception as e:
+                    st.session_state.lr_ai_summary = f"AI 요약 생성 실패: {str(e)}"
+                    ai_placeholder.error(st.session_state.lr_ai_summary)
+                    if 'lr_ai_stats' in st.session_state:
+                        del st.session_state.lr_ai_stats
+            elif st.session_state.get('lr_ai_summary'):
+                # Show already generated summary
+                st.info(st.session_state.lr_ai_summary)
+            else:
+                st.warning("AI 요약을 사용하려면 GEMINI_API_KEY 환경 변수를 설정하세요. ([설정 방법](https://makersuite.google.com/app/apikey))")
+        else:
+            st.info("파일을 업로드하고 변환을 실행하면 AI 요약이 여기에 표시됩니다.")
 
     # Footer
     st.markdown("---")
