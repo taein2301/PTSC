@@ -110,6 +110,39 @@ st.markdown("""
         background-color: #FFFFFF;
         border: 1px solid #E0E0E0;
         border-left: 4px solid #A50034;
+        color: #333333 !important;
+    }
+    /* Sidebar specific styling for better visibility */
+    [data-testid="stSidebar"] .stInfo {
+        background-color: #FFFFFF !important;
+        color: #1E1E1E !important;
+        border: 1px solid #CCCCCC;
+        border-left: 4px solid #A50034;
+    }
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #1E1E1E;
+    }
+    [data-testid="stSidebar"] a {
+        color: #A50034 !important;
+        text-decoration: none;
+    }
+    [data-testid="stSidebar"] a:hover {
+        color: #8B002C !important;
+        text-decoration: underline;
+    }
+    /* Sidebar expander styling */
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        background-color: #FFFFFF;
+        border: 1px solid #CCCCCC;
+        border-radius: 4px;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        color: #1E1E1E !important;
+        font-weight: 600;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] p,
+    [data-testid="stSidebar"] [data-testid="stExpander"] li {
+        color: #333333 !important;
     }
     /* Main content background */
     .main {
@@ -118,6 +151,16 @@ st.markdown("""
     /* Sidebar background */
     [data-testid="stSidebar"] {
         background-color: #F5F5F5;
+    }
+    /* Sidebar text color */
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] h4 {
+        color: #1E1E1E !important;
+    }
+    [data-testid="stSidebar"] p {
+        color: #333333 !important;
     }
 </style>
 """, unsafe_allow_html=True)
