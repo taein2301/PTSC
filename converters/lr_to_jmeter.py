@@ -15,11 +15,15 @@ from utils.constants import ERROR_CODES, LR_FUNCTIONS
 class LRToJMeterConverter(BaseConverter):
     """Converter for LoadRunner C script → JMeter JMX"""
 
-    def __init__(self):
-        """Initialize the converter"""
+    def __init__(self, include_comments: bool = True):
+        """Initialize the converter
+
+        Args:
+            include_comments: Whether to include descriptive comments in generated JMX
+        """
         super().__init__()
         self.parser = LRParser()
-        self.generator = JMXGenerator()
+        self.generator = JMXGenerator(include_comments=include_comments)
 
     def validate_input(self, content: str) -> Tuple[bool, Optional[str]]:
         """
@@ -107,14 +111,19 @@ class LRToJMeterConverter(BaseConverter):
 
         Returns:
             JMeter JMX file as string
+
+        Raises:
+            Exception: If generation fails
         """
         try:
             jmx_content = self.generator.generate(converted_data)
             return jmx_content
 
         except Exception as e:
-            self.add_error(f"{ERROR_CODES['CONVERSION_ERROR']}: Failed to generate output - {str(e)}")
-            return f"<!-- Error generating JMX: {str(e)} -->"
+            error_msg = f"{ERROR_CODES['CONVERSION_ERROR']}: Failed to generate output - {str(e)}"
+            self.add_error(error_msg)
+            # Re-raise the exception so execute_conversion can handle it properly
+            raise Exception(error_msg) from e
 
     def _analyze_parsed_data(self, parse_result: Dict[str, Any]) -> None:
         """

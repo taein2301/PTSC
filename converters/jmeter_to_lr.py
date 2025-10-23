@@ -15,11 +15,15 @@ from utils.constants import ERROR_CODES
 class JMeterToLRConverter(BaseConverter):
     """Converter for JMeter JMX → LoadRunner C script"""
 
-    def __init__(self):
-        """Initialize the converter"""
+    def __init__(self, include_comments: bool = True):
+        """Initialize the converter
+
+        Args:
+            include_comments: Whether to include descriptive comments in generated code
+        """
         super().__init__()
         self.parser = JMXParser()
-        self.generator = LRGenerator()
+        self.generator = LRGenerator(include_comments=include_comments)
 
     def validate_input(self, content: str) -> Tuple[bool, Optional[str]]:
         """
@@ -117,37 +121,58 @@ class JMeterToLRConverter(BaseConverter):
 
         Returns:
             LoadRunner C script as string
+
+        Raises:
+            Exception: If generation fails
         """
         try:
             lr_script = self.generator.generate(converted_data)
             return lr_script
 
         except Exception as e:
-            self.add_error(f"{ERROR_CODES['CONVERSION_ERROR']}: Failed to generate output - {str(e)}")
-            return f"/* Error generating LoadRunner script: {str(e)} */"
+            error_msg = f"{ERROR_CODES['CONVERSION_ERROR']}: Failed to generate output - {str(e)}"
+            self.add_error(error_msg)
+            # Re-raise the exception so execute_conversion can handle it properly
+            raise Exception(error_msg) from e
+
+    def _remove_duplicates(self, items: list) -> list:
+        """
+        Remove duplicate items from a list based on their name and type.
+
+        Args:
+            items: List of dictionaries with 'name' and 'type' keys
+
+        Returns:
+            List with duplicates removed
+        """
+        if not items:
+            return []
+
+        seen = set()
+        unique_items = []
+
+        for item in items:
+            # Create a unique key based on name and type
+            key = (item.get('name', ''), item.get('type', ''))
+
+            if key not in seen:
+                seen.add(key)
+                unique_items.append(item)
+
+        return unique_items
 
     def _reorganize_parsed_data(self, parse_result: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Reorganize parsed data to group elements with their parent thread groups.
+        The parser now organizes data hierarchically, so this method
+        just passes through the structure and ensures required fields exist.
 
         Args:
-            parse_result: Raw parsed data from JMXParser
+            parse_result: Raw parsed data from JMXParser (already hierarchical)
 
         Returns:
-            Reorganized data structure with elements grouped properly
+            Data structure ready for code generation
         """
-        # Extract elements from the flat list
-        elements = parse_result.get('elements', [])
         thread_groups = parse_result.get('thread_groups', [])
-
-        # Categorize elements
-        samplers = [e for e in elements if e.get('type') in ['HTTPSampler', 'HTTPSamplerProxy']]
-        headers = [e for e in elements if e.get('type') == 'HeaderManager']
-        extractors = [e for e in elements if e.get('type') in ['RegexExtractor', 'JSONExtractor']]
-        timers = [e for e in elements if e.get('type') == 'ConstantTimer']
-        assertions = [e for e in elements if e.get('type') == 'ResponseAssertion']
-        controllers = [e for e in elements if e.get('type') in ['TransactionController', 'LoopController', 'IfController']]
-        cookies = [e for e in elements if e.get('type') == 'CookieManager']
 
         # If no thread groups exist, create a default one
         if not thread_groups:
@@ -166,16 +191,22 @@ class JMeterToLRConverter(BaseConverter):
                 'cookies': []
             }]
 
-        # Assign elements to the first thread group (simplified approach)
-        # In a more sophisticated implementation, we'd track parent-child relationships
-        if thread_groups:
-            thread_groups[0]['samplers'] = samplers
-            thread_groups[0]['headers'] = headers
-            thread_groups[0]['extractors'] = extractors
-            thread_groups[0]['timers'] = timers
-            thread_groups[0]['assertions'] = assertions
-            thread_groups[0]['controllers'] = controllers
-            thread_groups[0]['cookies'] = cookies
+        # Ensure all thread groups have required lists
+        for tg in thread_groups:
+            if 'samplers' not in tg:
+                tg['samplers'] = []
+            if 'headers' not in tg:
+                tg['headers'] = []
+            if 'extractors' not in tg:
+                tg['extractors'] = []
+            if 'timers' not in tg:
+                tg['timers'] = []
+            if 'assertions' not in tg:
+                tg['assertions'] = []
+            if 'controllers' not in tg:
+                tg['controllers'] = []
+            if 'cookies' not in tg:
+                tg['cookies'] = []
 
         # Extract user variables from TestPlan variables
         user_vars = parse_result.get('variables', {})
@@ -185,7 +216,7 @@ class JMeterToLRConverter(BaseConverter):
             'thread_groups': thread_groups,
             'user_variables': user_vars,
             'variables': user_vars,
-            'elements': elements
+            'elements': parse_result.get('elements', [])
         }
 
     def _analyze_parsed_data(self, parse_result: Dict[str, Any]) -> None:

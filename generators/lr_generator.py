@@ -14,13 +14,18 @@ from utils.constants import LR_FUNCTIONS
 class LRGenerator:
     """Generator for LoadRunner C scripts"""
 
-    def __init__(self):
-        """Initialize the LoadRunner generator"""
+    def __init__(self, include_comments: bool = True):
+        """Initialize the LoadRunner generator
+
+        Args:
+            include_comments: Whether to include descriptive comments in generated code
+        """
         self.formatter = CodeFormatter()
         self.string_helper = StringHelper()
         self.indent_level = 1
         self.use_tabs = True  # LoadRunner uses tabs for indentation
         self.snapshot_counter = 1  # Track snapshot IDs for LoadRunner functions
+        self.include_comments = include_comments
 
     def generate(self, parsed_data: Dict[str, Any]) -> str:
         """
@@ -315,27 +320,28 @@ class LRGenerator:
 
     def _generate_http_request(self, sampler: Dict[str, Any]) -> str:
         """
-        Generate HTTP request function call with Korean comments
+        Generate HTTP request function call with optional Korean comments
 
         Args:
             sampler: Sampler data dictionary
 
         Returns:
-            LoadRunner web function call with Korean comments
+            LoadRunner web function call with optional Korean comments
         """
         method = sampler.get('method', 'GET').upper()
         name = sampler.get('name', 'HTTP Request')
         url = self._build_url(sampler)
 
-        # Add Korean comment before the request
-        comment_lines = []
-        comment_lines.append(self._indent("// ----------------------------------------"))
-        comment_lines.append(self._indent(f"// HTTP 요청: {name}"))
-        comment_lines.append(self._indent(f"// 메서드: {method}"))
-        comment_lines.append(self._indent(f"// URL: {url[:80]}{'...' if len(url) > 80 else ''}"))
-        comment_lines.append(self._indent("// ----------------------------------------"))
-
-        comment = "\n".join(comment_lines) + "\n"
+        # Add Korean comment before the request (if enabled)
+        comment = ""
+        if self.include_comments:
+            comment_lines = []
+            comment_lines.append(self._indent("// ----------------------------------------"))
+            comment_lines.append(self._indent(f"// HTTP 요청: {name}"))
+            comment_lines.append(self._indent(f"// 메서드: {method}"))
+            comment_lines.append(self._indent(f"// URL: {url[:80]}{'...' if len(url) > 80 else ''}"))
+            comment_lines.append(self._indent("// ----------------------------------------"))
+            comment = "\n".join(comment_lines) + "\n"
 
         if method == 'GET':
             return comment + self._generate_web_url(name, url, sampler)
@@ -565,13 +571,15 @@ class LRGenerator:
         indent = "    "  # 4 spaces
 
         lines = []
-        lines.append(indent + "// ----------------------------------------")
-        lines.append(indent + f"// 상관관계(Correlation): {refname}")
-        lines.append(indent + f"// 좌측 경계(LB): {lb[:40]}{'...' if len(lb) > 40 else ''}")
-        lines.append(indent + f"// 우측 경계(RB): {rb[:40]}{'...' if len(rb) > 40 else ''}")
-        lines.append(indent + f"// 추출 순서: {ordinal_kr} 값")
-        lines.append(indent + "// 주의: 이 함수는 HTTP 요청 전에 위치해야 합니다")
-        lines.append(indent + "// ----------------------------------------")
+        # Add comments if enabled
+        if self.include_comments:
+            lines.append(indent + "// ----------------------------------------")
+            lines.append(indent + f"// 상관관계(Correlation): {refname}")
+            lines.append(indent + f"// 좌측 경계(LB): {lb[:40]}{'...' if len(lb) > 40 else ''}")
+            lines.append(indent + f"// 우측 경계(RB): {rb[:40]}{'...' if len(rb) > 40 else ''}")
+            lines.append(indent + f"// 추출 순서: {ordinal_kr} 값")
+            lines.append(indent + "// 주의: 이 함수는 HTTP 요청 전에 위치해야 합니다")
+            lines.append(indent + "// ----------------------------------------")
         lines.append(indent + f'{LR_FUNCTIONS["WEB_REG_SAVE_PARAM"]}("{refname}", ')
         lines.append(indent + f'    "LB={lb_escaped}", ')
         lines.append(indent + f'    "RB={rb_escaped}", ')
@@ -605,13 +613,13 @@ class LRGenerator:
 
     def _generate_think_time(self, timer: Dict[str, Any]) -> str:
         """
-        Generate lr_think_time call with Korean comments
+        Generate lr_think_time call with optional Korean comments
 
         Args:
             timer: Timer data
 
         Returns:
-            lr_think_time function call with Korean comments
+            lr_think_time function call with optional Korean comments
         """
         delay = timer.get('delay', '0')
 
@@ -619,13 +627,21 @@ class LRGenerator:
         try:
             delay_seconds = float(delay) / 1000.0
             delay_ms = int(float(delay))
-            comment = self._indent(f'// Think Time: {delay_ms}ms = {delay_seconds:.1f}초 대기', level=1)
-            think_time = self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}({delay_seconds:.1f});', level=1)
-            return f"{comment}\n{think_time}"
+            if self.include_comments:
+                comment = self._indent(f'// Think Time: {delay_ms}ms = {delay_seconds:.1f}초 대기', level=1)
+                think_time = self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}({delay_seconds:.1f});', level=1)
+                return f"{comment}\n{think_time}"
+            else:
+                think_time = self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}({delay_seconds:.1f});', level=1)
+                return think_time
         except ValueError:
-            comment = self._indent('// Think Time: 기본 1초 대기', level=1)
-            think_time = self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}(1);', level=1)
-            return f"{comment}\n{think_time}"
+            if self.include_comments:
+                comment = self._indent('// Think Time: 기본 1초 대기', level=1)
+                think_time = self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}(1);', level=1)
+                return f"{comment}\n{think_time}"
+            else:
+                think_time = self._indent(f'{LR_FUNCTIONS["LR_THINK_TIME"]}(1);', level=1)
+                return think_time
 
     def _generate_transaction_start(self, name: str) -> str:
         """

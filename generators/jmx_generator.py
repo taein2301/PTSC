@@ -16,12 +16,17 @@ from utils.constants import JMETER_ELEMENTS
 class JMXGenerator:
     """Generator for JMeter JMX files"""
 
-    def __init__(self):
-        """Initialize the JMX generator"""
+    def __init__(self, include_comments: bool = True):
+        """Initialize the JMX generator
+
+        Args:
+            include_comments: Whether to include descriptive comments in generated JMX
+        """
         self.string_helper = StringHelper()
         self.test_plan_version = "1.2"
         self.jmeter_version = "5.6.3"
         self.jmeter_props = "5.0"
+        self.include_comments = include_comments
 
     def generate(self, parsed_data: Dict[str, Any]) -> str:
         """
@@ -241,6 +246,15 @@ class JMXGenerator:
             'testname': request.get('name', 'HTTP Request'),
             'enabled': 'true'
         })
+
+        # Add comment if enabled
+        if self.include_comments:
+            method = request.get('method', 'GET')
+            protocol = request.get('protocol', 'https')
+            domain = request.get('domain', '')
+            path = request.get('path', '/')
+            comment = f"HTTP {method} 요청: {protocol}://{domain}{path}"
+            self._add_string_prop(sampler, 'TestPlan.comments', comment)
 
         # Add HTTP sampler properties
         self._add_string_prop(sampler, 'HTTPSampler.domain', request.get('domain', ''))

@@ -215,9 +215,7 @@ if 'lr_sample_file' not in st.session_state:
 if 'lr_uploader_key' not in st.session_state:
     st.session_state.lr_uploader_key = 0
 
-# Conversion settings (for future enhancements)
-if 'indent_size' not in st.session_state:
-    st.session_state.indent_size = 4
+# Conversion settings
 if 'include_comments' not in st.session_state:
     st.session_state.include_comments = True
 if 'error_handling_level' not in st.session_state:
@@ -548,8 +546,9 @@ def convert_jmx_to_lr(uploaded_file=None, content_str=None, filename=None):
         encoding = validator.detect_encoding(file_content)
         content_string = file_content.decode(encoding)
 
-        # Perform conversion
-        converter = JMeterToLRConverter()
+        # Perform conversion with comment settings
+        include_comments = st.session_state.get('include_comments', True)
+        converter = JMeterToLRConverter(include_comments=include_comments)
         success, output_content, stats = converter.execute_conversion(content_string)
 
         # Generate log message
@@ -643,8 +642,9 @@ def convert_lr_to_jmx(uploaded_file=None, content_str=None, filename=None):
         encoding = validator.detect_encoding(file_content)
         content_string = file_content.decode(encoding)
 
-        # Perform conversion
-        converter = LRToJMeterConverter()
+        # Perform conversion with comment settings
+        include_comments = st.session_state.get('include_comments', True)
+        converter = LRToJMeterConverter(include_comments=include_comments)
         success, output_content, stats = converter.execute_conversion(content_string)
 
         # Generate log message
@@ -712,18 +712,12 @@ def main():
 
         with st.expander("Code Formatting", expanded=False):
             st.markdown("**생성되는 코드의 포맷 설정**")
-            st.session_state.indent_size = st.select_slider(
-                "Indentation Size",
-                options=[2, 4, 8],
-                value=st.session_state.indent_size,
-                help="코드 들여쓰기에 사용할 스페이스 개수"
-            )
-
             st.session_state.include_comments = st.checkbox(
                 "Include Descriptive Comments",
                 value=st.session_state.include_comments,
-                help="변환된 코드에 설명 주석 추가"
+                help="변환된 코드에 설명 주석 추가 (권장)"
             )
+            st.caption("✅ 주석을 포함하면 변환된 코드를 이해하기 쉽습니다.")
 
         with st.expander("Error Handling", expanded=False):
             st.markdown("**에러 처리 수준 설정**")
@@ -737,7 +731,7 @@ def main():
             st.caption("• **Standard**: 표준 에러 처리 포함")
             st.caption("• **Verbose**: 상세한 에러 로깅 포함")
 
-        st.info("💡 **참고**: 위 설정은 UI만 구현되어 있으며, 실제 변환에는 아직 적용되지 않습니다.")
+        st.info("💡 **참고**: Include Comments는 실제 적용됩니다. Error Handling은 향후 구현 예정입니다.")
 
         st.markdown("---")
         st.markdown("### ℹ️ About")
