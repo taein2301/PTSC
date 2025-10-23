@@ -1073,12 +1073,12 @@ Runtime Settings > Run Logic > Run:
                 if st.session_state.jmx_converted_content:
                     # Check if we have multiple files
                     if st.session_state.get('jmx_output_files'):
-                        # Show files in tabs
+                        # Show files in tabs (Action.c is default/first)
                         import hashlib
-                        file_tabs = st.tabs(["globals.h", "vuser_init.c", "Action.c", "vuser_end.c"])
+                        file_tabs = st.tabs(["Action.c", "vuser_init.c", "vuser_end.c", "globals.h"])
 
                         for idx, (filename, tab) in enumerate(zip(
-                            ["globals.h", "vuser_init.c", "Action.c", "vuser_end.c"],
+                            ["Action.c", "vuser_init.c", "vuser_end.c", "globals.h"],
                             file_tabs
                         )):
                             with tab:
