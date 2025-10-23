@@ -59,6 +59,10 @@ class JMXParser:
         self.warnings: List[str] = []
         self.logger = logging.getLogger(__name__)
 
+        # Stack to track current parsing context
+        self.context_stack: List[Dict[str, Any]] = []
+        self.current_thread_group: Optional[Dict[str, Any]] = None
+
         if file_path:
             self.load_file(file_path)
 
@@ -318,7 +322,13 @@ class JMXParser:
             'delay': 0,
             'on_sample_error': 'continue',
             'comments': '',
-            'samplers': []
+            'samplers': [],
+            'headers': [],
+            'extractors': [],
+            'timers': [],
+            'assertions': [],
+            'controllers': [],
+            'cookies': []
         }
 
         # Extract number of threads
@@ -390,6 +400,10 @@ class JMXParser:
             thread_group['comments'] = comments_prop.text
 
         self.test_plan['thread_groups'].append(thread_group)
+
+        # Set as current thread group for child elements
+        self.current_thread_group = thread_group
+
         self.logger.info(f"Parsed ThreadGroup: {thread_group['name']} "
                          f"({thread_group['num_threads']} threads, "
                          f"{thread_group['ramp_time']}s ramp-up, "
@@ -911,7 +925,11 @@ class JMXParser:
             'enabled': self._get_element_enabled(controller_elem),
             'include_timers': True,
             'generate_parent_sample': False,
-            'comments': ''
+            'comments': '',
+            'samplers': [],
+            'timers': [],
+            'extractors': [],
+            'headers': []
         }
 
         # Extract include timers
@@ -1002,11 +1020,18 @@ class JMXParser:
             'enabled': self._get_element_enabled(controller_elem),
             'loops': 1,
             'continue_forever': False,
-            'comments': ''
+            'comments': '',
+            'samplers': [],
+            'timers': [],
+            'extractors': [],
+            'headers': []
         }
 
-        # Extract loop count
+        # Extract loop count (can be stringProp or intProp)
         loops_prop = controller_elem.find(".//stringProp[@name='LoopController.loops']")
+        if loops_prop is None:
+            loops_prop = controller_elem.find(".//intProp[@name='LoopController.loops']")
+
         if loops_prop is not None and loops_prop.text:
             try:
                 loop_controller['loops'] = int(loops_prop.text)
@@ -1092,30 +1117,71 @@ class JMXParser:
 
     def _parse_hash_tree(self, element: ET.Element, parent_type: str = '') -> None:
         """
-        Parse hashTree elements recursively.
+        Parse hashTree elements using pair-wise iteration to maintain proper hierarchy.
 
         JMeter uses hashTree elements to represent hierarchical structure.
         Each element is followed by a hashTree containing its children.
+        Pattern: element1, hashTree1, element2, hashTree2, ...
 
         Args:
-            element: Current XML element
+            element: Current XML element (usually a hashTree)
             parent_type: Type of parent element for context
         """
-        for child in element:
+        children = list(element)
+        i = 0
+
+        while i < len(children):
+            child = children[i]
+
+            # Skip hashTree tags themselves when iterating
             if child.tag == JMETER_HASH_TREE:
-                # Process children of hashTree
+                # Recursively process the hashTree's contents
                 self._parse_hash_tree(child, parent_type)
+                i += 1
+                continue
+
+            # Process actual test element
+            element_type = self._get_element_type(child)
+
+            if element_type:
+                # Check if this element type creates a new context
+                creates_context = element_type in [
+                    JMETER_THREAD_GROUP,
+                    JMETER_TRANSACTION_CONTROLLER,
+                    JMETER_LOOP_CONTROLLER
+                ]
+
+                # Store stack depth before processing
+                stack_depth_before = len(self.context_stack)
+
+                # Process the element (may push onto context stack)
+                self._process_element(child, element_type)
+
+                # Check if next sibling is its hashTree (children)
+                if i + 1 < len(children) and children[i + 1].tag == JMETER_HASH_TREE:
+                    child_hashtree = children[i + 1]
+
+                    # Only process child hashTree if it has content
+                    if len(child_hashtree) > 0:
+                        # Recursively process children with this element as parent
+                        self._parse_hash_tree(child_hashtree, element_type)
+
+                    # Pop context if this element created one
+                    if creates_context and len(self.context_stack) > stack_depth_before:
+                        self.context_stack.pop()
+
+                    # Skip the hashTree we just processed
+                    i += 2
+                else:
+                    # No hashTree following, pop context if needed
+                    if creates_context and len(self.context_stack) > stack_depth_before:
+                        self.context_stack.pop()
+
+                    # Just move to next element
+                    i += 1
             else:
-                # Process actual test element
-                element_type = self._get_element_type(child)
-
-                if element_type:
-                    self._process_element(child, element_type)
-
-                    # Find and process its hashTree (children)
-                    next_elem = self._get_next_sibling(element, child)
-                    if next_elem is not None and next_elem.tag == JMETER_HASH_TREE:
-                        self._parse_hash_tree(next_elem, element_type)
+                # Unknown element type, skip it
+                i += 1
 
     def _get_element_type(self, element: ET.Element) -> Optional[str]:
         """
@@ -1165,77 +1231,117 @@ class JMXParser:
     def _process_element(self, element: ET.Element, element_type: str) -> None:
         """
         Process a test element based on its type.
+        Elements are added to their appropriate parent container.
 
         Args:
             element: XML element
             element_type: Type of element
         """
-        # Handle ThreadGroup specially
+        # Handle ThreadGroup specially - creates new context
         if element_type == JMETER_THREAD_GROUP:
             self._parse_thread_group(element)
+            # Push thread group onto context stack
+            self.context_stack.append(self.current_thread_group)
             return
 
-        # Handle HTTP Sampler specially
+        # Get current parent context from stack
+        current_context = self.context_stack[-1] if self.context_stack else None
+
+        # Handle HTTP Sampler
         if element_type in [JMETER_HTTP_SAMPLER, JMETER_HTTP_SAMPLER_OLD]:
             sampler = self._parse_http_sampler(element)
-            self.test_plan['elements'].append(sampler)
+            if current_context and 'samplers' in current_context:
+                current_context['samplers'].append(sampler)
+            else:
+                self.test_plan['elements'].append(sampler)
             return
 
-        # Handle Header Manager specially
+        # Handle Header Manager
         if element_type == JMETER_HEADER_MANAGER:
             header_manager = self._parse_header_manager(element)
-            self.test_plan['elements'].append(header_manager)
+            if current_context and 'headers' in current_context:
+                current_context['headers'].append(header_manager)
+            else:
+                self.test_plan['elements'].append(header_manager)
             return
 
-        # Handle Regex Extractor specially
+        # Handle Regex Extractor
         if element_type == JMETER_REGEX_EXTRACTOR:
             regex_extractor = self._parse_regex_extractor(element)
-            self.test_plan['elements'].append(regex_extractor)
+            if current_context and 'extractors' in current_context:
+                current_context['extractors'].append(regex_extractor)
+            else:
+                self.test_plan['elements'].append(regex_extractor)
             return
 
-        # Handle JSON Extractor specially
+        # Handle JSON Extractor
         if element_type == JMETER_JSON_EXTRACTOR:
             json_extractor = self._parse_json_extractor(element)
-            self.test_plan['elements'].append(json_extractor)
+            if current_context and 'extractors' in current_context:
+                current_context['extractors'].append(json_extractor)
+            else:
+                self.test_plan['elements'].append(json_extractor)
             return
 
-        # Handle Response Assertion specially
+        # Handle Response Assertion
         if element_type == JMETER_RESPONSE_ASSERTION:
             assertion = self._parse_response_assertion(element)
-            self.test_plan['elements'].append(assertion)
+            if current_context and 'assertions' in current_context:
+                current_context['assertions'].append(assertion)
+            else:
+                self.test_plan['elements'].append(assertion)
             return
 
-        # Handle Constant Timer specially
+        # Handle Constant Timer
         if element_type == JMETER_CONSTANT_TIMER:
             timer = self._parse_constant_timer(element)
-            self.test_plan['elements'].append(timer)
+            if current_context and 'timers' in current_context:
+                current_context['timers'].append(timer)
+            else:
+                self.test_plan['elements'].append(timer)
             return
 
-        # Handle Transaction Controller specially
+        # Handle Transaction Controller - creates new context
         if element_type == JMETER_TRANSACTION_CONTROLLER:
             transaction = self._parse_transaction_controller(element)
-            self.test_plan['elements'].append(transaction)
+            if current_context and 'controllers' in current_context:
+                current_context['controllers'].append(transaction)
+            else:
+                self.test_plan['elements'].append(transaction)
+            # Push transaction controller onto context stack
+            self.context_stack.append(transaction)
             return
 
-        # Handle If Controller specially
+        # Handle If Controller - creates new context
         if element_type == JMETER_IF_CONTROLLER:
             if_controller = self._parse_if_controller(element)
-            self.test_plan['elements'].append(if_controller)
+            if current_context and 'controllers' in current_context:
+                current_context['controllers'].append(if_controller)
+            else:
+                self.test_plan['elements'].append(if_controller)
             return
 
-        # Handle Loop Controller specially
+        # Handle Loop Controller - creates new context
         if element_type == JMETER_LOOP_CONTROLLER:
             loop_controller = self._parse_loop_controller(element)
-            self.test_plan['elements'].append(loop_controller)
+            if current_context and 'controllers' in current_context:
+                current_context['controllers'].append(loop_controller)
+            else:
+                self.test_plan['elements'].append(loop_controller)
+            # Push loop controller onto context stack
+            self.context_stack.append(loop_controller)
             return
 
-        # Handle Cookie Manager specially
+        # Handle Cookie Manager
         if element_type == JMETER_COOKIE_MANAGER:
             cookie_manager = self._parse_cookie_manager(element)
-            self.test_plan['elements'].append(cookie_manager)
+            if current_context and 'cookies' in current_context:
+                current_context['cookies'].append(cookie_manager)
+            else:
+                self.test_plan['elements'].append(cookie_manager)
             return
 
-        # Store element info
+        # Store other element types
         element_info = {
             'type': element_type,
             'name': self._get_element_name(element),
@@ -1243,7 +1349,13 @@ class JMXParser:
             'properties': self._extract_properties(element)
         }
 
-        self.test_plan['elements'].append(element_info)
+        if current_context and isinstance(current_context, dict):
+            # Add to current context if it has an elements list
+            if 'elements' not in current_context:
+                current_context['elements'] = []
+            current_context['elements'].append(element_info)
+        else:
+            self.test_plan['elements'].append(element_info)
 
         self.logger.debug(f"Processed element: {element_type} - {element_info['name']}")
 

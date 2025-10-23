@@ -81,11 +81,12 @@ class LRParser:
             function_name: Name of the function to extract
 
         Returns:
-            Function body as string
+            Function body as string (without opening/closing braces)
         """
         in_function = False
         brace_count = 0
         function_lines = []
+        found_opening_brace = False
 
         for line in self.lines:
             stripped = line.strip()
@@ -93,17 +94,40 @@ class LRParser:
             # Find function start
             if not in_function and function_name in stripped and '()' in stripped:
                 in_function = True
+                # Check if opening brace is on same line
+                if '{' in stripped:
+                    found_opening_brace = True
+                    brace_count = 1
                 continue
 
             if in_function:
-                # Track braces to find function end
-                brace_count += stripped.count('{')
-                brace_count -= stripped.count('}')
+                # Count braces
+                open_braces = stripped.count('{')
+                close_braces = stripped.count('}')
 
-                if brace_count < 0:  # Function ended
+                # If we haven't found opening brace yet
+                if not found_opening_brace:
+                    if open_braces > 0:
+                        found_opening_brace = True
+                        brace_count = open_braces - close_braces
+                        # Don't include the line with just the opening brace
+                        if stripped == '{':
+                            continue
+                    continue
+
+                # Track brace depth
+                brace_count += open_braces
+                brace_count -= close_braces
+
+                # If we're back to 0, function ended (don't include closing brace line)
+                if brace_count == 0:
                     break
 
-                function_lines.append(line)
+                # Include the line (unless it's just a brace)
+                if stripped not in ['{', '}']:
+                    function_lines.append(line)
+                elif not (stripped == '}' and brace_count == 0):
+                    function_lines.append(line)
 
         return '\n'.join(function_lines)
 

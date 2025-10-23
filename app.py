@@ -9,6 +9,8 @@ This application provides bidirectional conversion between:
 
 import streamlit as st
 import os
+import io
+import zipfile
 from datetime import datetime
 from dotenv import load_dotenv
 from code_editor import code_editor
@@ -587,14 +589,26 @@ def convert_jmx_to_lr(uploaded_file=None, content_str=None, filename=None):
             summary = converter.get_conversion_summary()
             log_msg = f"Conversion Successful!\n\n{summary}"
 
-            # Generate output filename
-            output_filename = FileHelper.generate_output_filename(file_name, '.c')
+            # output_content is now a dict with 4 files
+            # Store the files dict
+            if isinstance(output_content, dict):
+                st.session_state.jmx_output_files = output_content
+                # Use Action.c for preview
+                preview_content = output_content.get('Action.c', '')
+            else:
+                # Legacy single file support
+                preview_content = output_content
+                st.session_state.jmx_output_files = None
+
+            # Generate output filename (ZIP)
+            base_name = os.path.splitext(file_name)[0]
+            output_filename = f"{base_name}_lr.zip"
             st.session_state.jmx_output_filename = output_filename
 
             # Store stats for AI summary
             st.session_state.jmx_conversion_stats = {
                 'stats': stats,
-                'output_content': output_content,
+                'output_content': preview_content,
                 'source_type': 'JMeter',
                 'target_type': 'LoadRunner'
             }
@@ -604,10 +618,10 @@ def convert_jmx_to_lr(uploaded_file=None, content_str=None, filename=None):
                 'stats': stats.get('stats', {}),
                 'warnings': stats.get('warnings', []),
                 'errors': stats.get('errors', []),
-                'converted_content': output_content
+                'converted_content': preview_content
             }
 
-            return True, output_content, log_msg
+            return True, preview_content, log_msg
         else:
             errors = stats.get('errors', [])
             warnings = stats.get('warnings', [])
@@ -885,13 +899,30 @@ def main():
 
         with button_col1:
             if st.session_state.jmx_converted_content:
-                st.download_button(
-                    label="⬇️ Download Converted Script",
-                    data=st.session_state.jmx_converted_content,
-                    file_name=st.session_state.jmx_output_filename or "converted_script.c",
-                    mime="text/plain",
-                    key="download_lr"
-                )
+                # Check if we have multiple files
+                if st.session_state.get('jmx_output_files'):
+                    # Create ZIP file
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        for filename, content in st.session_state.jmx_output_files.items():
+                            zip_file.writestr(filename, content)
+
+                    st.download_button(
+                        label="⬇️ Download LoadRunner Script (ZIP)",
+                        data=zip_buffer.getvalue(),
+                        file_name=st.session_state.jmx_output_filename or "converted_script.zip",
+                        mime="application/zip",
+                        key="download_lr"
+                    )
+                else:
+                    # Legacy single file download
+                    st.download_button(
+                        label="⬇️ Download Converted Script",
+                        data=st.session_state.jmx_converted_content,
+                        file_name=st.session_state.jmx_output_filename or "converted_script.c",
+                        mime="text/plain",
+                        key="download_lr"
+                    )
 
         with button_col2:
             clear_btn = st.button("🗑️ Clear All", key="clear_jmx")
@@ -1040,38 +1071,79 @@ Runtime Settings > Run Logic > Run:
             with preview_col2:
                 st.markdown("**Converted LoadRunner C:**")
                 if st.session_state.jmx_converted_content:
-                    # Generate unique key based on content to force refresh
-                    import hashlib
-                    content_hash = hashlib.md5(st.session_state.jmx_converted_content.encode()).hexdigest()[:8]
-                    editor_key = f"jmx_converted_editor_{content_hash}"
+                    # Check if we have multiple files
+                    if st.session_state.get('jmx_output_files'):
+                        # Show files in tabs
+                        import hashlib
+                        file_tabs = st.tabs(["globals.h", "vuser_init.c", "Action.c", "vuser_end.c"])
 
-                    # Use code_editor for enhanced display with full content
-                    code_editor(
-                        st.session_state.jmx_converted_content,
-                        lang="c_cpp",
-                        theme="dracula",
-                        height=[20, 30],
-                        options={
-                            "wrap": True,
-                            "showGutter": True,
-                            "highlightActiveLine": True,
-                            "showPrintMargin": False,
-                            "fontSize": 14,
-                            "enableBasicAutocompletion": False,
-                            "enableLiveAutocompletion": False,
-                            "useSoftTabs": False,
-                            "tabSize": 4
-                        },
-                        buttons=[{
-                            "name": "Copy",
-                            "feather": "Copy",
-                            "hasText": True,
-                            "alwaysOn": True,
-                            "commands": ["copyAll"],
-                            "style": {"top": "0.46rem", "right": "0.4rem"}
-                        }],
-                        key=editor_key
-                    )
+                        for idx, (filename, tab) in enumerate(zip(
+                            ["globals.h", "vuser_init.c", "Action.c", "vuser_end.c"],
+                            file_tabs
+                        )):
+                            with tab:
+                                file_content = st.session_state.jmx_output_files.get(filename, "// File not found")
+                                content_hash = hashlib.md5(file_content.encode()).hexdigest()[:8]
+                                editor_key = f"jmx_file_{idx}_{content_hash}"
+
+                                code_editor(
+                                    file_content,
+                                    lang="c_cpp",
+                                    theme="dracula",
+                                    height=[15, 25],
+                                    options={
+                                        "wrap": True,
+                                        "showGutter": True,
+                                        "highlightActiveLine": True,
+                                        "showPrintMargin": False,
+                                        "fontSize": 14,
+                                        "enableBasicAutocompletion": False,
+                                        "enableLiveAutocompletion": False,
+                                        "useSoftTabs": False,
+                                        "tabSize": 4
+                                    },
+                                    buttons=[{
+                                        "name": "Copy",
+                                        "feather": "Copy",
+                                        "hasText": True,
+                                        "alwaysOn": True,
+                                        "commands": ["copyAll"],
+                                        "style": {"top": "0.46rem", "right": "0.4rem"}
+                                    }],
+                                    key=editor_key
+                                )
+                    else:
+                        # Legacy single file display
+                        import hashlib
+                        content_hash = hashlib.md5(st.session_state.jmx_converted_content.encode()).hexdigest()[:8]
+                        editor_key = f"jmx_converted_editor_{content_hash}"
+
+                        code_editor(
+                            st.session_state.jmx_converted_content,
+                            lang="c_cpp",
+                            theme="dracula",
+                            height=[20, 30],
+                            options={
+                                "wrap": True,
+                                "showGutter": True,
+                                "highlightActiveLine": True,
+                                "showPrintMargin": False,
+                                "fontSize": 14,
+                                "enableBasicAutocompletion": False,
+                                "enableLiveAutocompletion": False,
+                                "useSoftTabs": False,
+                                "tabSize": 4
+                            },
+                            buttons=[{
+                                "name": "Copy",
+                                "feather": "Copy",
+                                "hasText": True,
+                                "alwaysOn": True,
+                                "commands": ["copyAll"],
+                                "style": {"top": "0.46rem", "right": "0.4rem"}
+                            }],
+                            key=editor_key
+                        )
                 else:
                     code_editor(
                         "// Conversion result will appear here\n// Upload a file to start",

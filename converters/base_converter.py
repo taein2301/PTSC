@@ -119,9 +119,13 @@ class BaseConverter(ABC):
             self.warnings.extend(conversion_result.get('warnings', []))
 
             # Step 3: Generate output
-            output_content = self.generate_output(conversion_result.get('data', {}))
-
-            return True, output_content, self._get_conversion_stats()
+            try:
+                output_content = self.generate_output(conversion_result.get('data', {}))
+                return True, output_content, self._get_conversion_stats()
+            except Exception as gen_error:
+                # Generation error - errors already added by generate_output
+                self.errors.append(f"Generation failed: {str(gen_error)}")
+                return False, None, self._get_conversion_stats()
 
         except Exception as e:
             self.errors.append(f"Conversion error: {str(e)}")

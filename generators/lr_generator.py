@@ -27,9 +27,35 @@ class LRGenerator:
         self.snapshot_counter = 1  # Track snapshot IDs for LoadRunner functions
         self.include_comments = include_comments
 
-    def generate(self, parsed_data: Dict[str, Any]) -> str:
+    def generate(self, parsed_data: Dict[str, Any]) -> Dict[str, str]:
         """
-        Generate complete LoadRunner C script from parsed data
+        Generate LoadRunner C script files from parsed data
+
+        Args:
+            parsed_data: Parsed test plan data
+
+        Returns:
+            Dictionary with 4 files: globals.h, vuser_init.c, Action.c, vuser_end.c
+        """
+        files = {}
+
+        # Generate globals.h
+        files['globals.h'] = self._generate_globals_h(parsed_data)
+
+        # Generate vuser_init.c
+        files['vuser_init.c'] = self._generate_vuser_init_file(parsed_data)
+
+        # Generate Action.c
+        files['Action.c'] = self._generate_action_file(parsed_data)
+
+        # Generate vuser_end.c
+        files['vuser_end.c'] = self._generate_vuser_end_file(parsed_data)
+
+        return files
+
+    def generate_single_file(self, parsed_data: Dict[str, Any]) -> str:
+        """
+        Generate complete LoadRunner C script as single file (legacy support)
 
         Args:
             parsed_data: Parsed test plan data
@@ -287,11 +313,31 @@ class LRGenerator:
                         lines.append(self._indent(f'// ======================================== 루프 종료: {ctrl_name} ========================================', level=1))
                     lines.append("")
 
-            # Process any top-level samplers (not in controllers)
-            if samplers:
-                for sampler in samplers:
+            # Process any top-level samplers and extractors (not in controllers)
+            extractors = thread_group.get('extractors', [])
+            timers = thread_group.get('timers', [])
+
+            if samplers or extractors:
+                # Track which extractors/timers have been used
+                extractor_idx = 0
+                timer_idx = 0
+
+                for sampler_idx, sampler in enumerate(samplers):
+                    # Add extractor BEFORE the sampler it applies to
+                    if extractor_idx < len(extractors):
+                        lines.append(self._generate_extractor(extractors[extractor_idx]))
+                        lines.append("")
+                        extractor_idx += 1
+
+                    # Generate HTTP request
                     lines.append(self._generate_http_request(sampler))
                     lines.append("")
+
+                    # Add timer after the sampler
+                    if timer_idx < len(timers):
+                        lines.append(self._generate_think_time(timers[timer_idx]))
+                        lines.append("")
+                        timer_idx += 1
 
         lines.append(self._indent("return 0;"))
         lines.append("}")
@@ -368,7 +414,16 @@ class LRGenerator:
         if method == 'GET':
             return comment + self._generate_web_url(name, url, sampler)
         elif method == 'POST':
-            return comment + self._generate_web_submit_data(sampler, name, url)
+            # Check if this is form data or raw body (JSON)
+            post_body = sampler.get('body', sampler.get('post_body', ''))
+            parameters = sampler.get('parameters', sampler.get('arguments', []))
+
+            # If there's a raw body (JSON, XML, etc.), use web_custom_request
+            if post_body and not parameters:
+                return comment + self._generate_web_custom_request(sampler, name, url, method)
+            else:
+                # Form data: use web_submit_data
+                return comment + self._generate_web_submit_data(sampler, name, url)
         else:
             return comment + self._generate_web_custom_request(sampler, name, url, method)
 
@@ -395,13 +450,13 @@ class LRGenerator:
         lines.append(indent + f'{LR_FUNCTIONS["WEB_URL"]}("{escaped_name}", ')
 
         if self.include_comments:
-            lines.append(indent + f'    "URL={escaped_url}",  // 요청할 URL 주소')
-            lines.append(indent + f'    "Resource=0",  // 0: 페이지 요청, 1: 리소스(이미지/CSS/JS) 요청')
-            lines.append(indent + f'    "RecContentType=text/html",  // 응답 Content-Type (응답 검증용)')
-            lines.append(indent + f'    "Referer=",  // HTTP Referer 헤더 (이전 페이지 URL)')
-            lines.append(indent + f'    "Snapshot={snapshot_id}",  // VuGen 스냅샷 파일명 (디버깅용)')
-            lines.append(indent + f'    "Mode=HTML",  // 파싱 모드: HTML, HTTP, ALL')
-            lines.append(indent + f'    LAST );  // 파라미터 목록의 끝을 나타냄 (필수)')
+            lines.append(indent + f'    "URL={escaped_url}",            // 요청할 URL 주소')
+            lines.append(indent + f'    "Resource=0",                   // 0: 페이지 요청, 1: 리소스(이미지/CSS/JS) 요청')
+            lines.append(indent + f'    "RecContentType=text/html",     // 응답 Content-Type (응답 검증용)')
+            lines.append(indent + f'    "Referer=",                     // HTTP Referer 헤더 (이전 페이지 URL)')
+            lines.append(indent + f'    "Snapshot={snapshot_id}",       // VuGen 스냅샷 파일명 (디버깅용)')
+            lines.append(indent + f'    "Mode=HTML",                    // 파싱 모드: HTML, HTTP, ALL')
+            lines.append(indent + f'    LAST );                         // 파라미터 목록의 끝을 나타냄 (필수)')
         else:
             lines.append(indent + f'    "URL={escaped_url}", ')
             lines.append(indent + f'    "Resource=0", ')
@@ -441,12 +496,12 @@ class LRGenerator:
 
         # Add standard parameters with comments
         if self.include_comments:
-            lines.append(indent + f'    "Action={escaped_url}",  // Form Action URL (POST 요청 대상)')
-            lines.append(indent + f'    "Method=POST",  // HTTP 메서드 (POST/GET)')
-            lines.append(indent + f'    "RecContentType=text/html",  // 응답 Content-Type')
-            lines.append(indent + f'    "Referer=",  // HTTP Referer 헤더')
-            lines.append(indent + f'    "Snapshot={snapshot_id}",  // VuGen 스냅샷 파일명')
-            lines.append(indent + f'    "Mode=HTML",  // 파싱 모드: HTML, HTTP, ALL')
+            lines.append(indent + f'    "Action={escaped_url}",         // Form Action URL (POST 요청 대상)')
+            lines.append(indent + f'    "Method=POST",                  // HTTP 메서드 (POST/GET)')
+            lines.append(indent + f'    "RecContentType=text/html",     // 응답 Content-Type')
+            lines.append(indent + f'    "Referer=",                     // HTTP Referer 헤더')
+            lines.append(indent + f'    "Snapshot={snapshot_id}",       // VuGen 스냅샷 파일명')
+            lines.append(indent + f'    "Mode=HTML",                    // 파싱 모드: HTML, HTTP, ALL')
         else:
             lines.append(indent + f'    "Action={escaped_url}", ')
             lines.append(indent + f'    "Method=POST", ')
@@ -458,7 +513,7 @@ class LRGenerator:
         # Add parameters as ITEMDATA if present
         if parameters:
             if self.include_comments:
-                lines.append(indent + f'    ITEMDATA,  // POST 파라미터 목록 시작')
+                lines.append(indent + f'    ITEMDATA,                       // POST 파라미터 목록 시작')
             else:
                 lines.append(indent + f'    ITEMDATA, ')
 
@@ -476,7 +531,7 @@ class LRGenerator:
                     lines.append(indent + f'    "Name={param_name}", "Value={param_value}", ENDITEM, ')
 
         if self.include_comments:
-            lines.append(indent + f'    LAST );  // 파라미터 목록 끝 (필수)')
+            lines.append(indent + f'    LAST );                         // 파라미터 목록 끝 (필수)')
         else:
             lines.append(indent + f'    LAST );')
 
@@ -490,7 +545,7 @@ class LRGenerator:
             sampler: Sampler data
             name: Step name
             url: Full URL
-            method: HTTP method (PUT, DELETE, PATCH, etc.)
+            method: HTTP method (POST with JSON body, PUT, DELETE, PATCH, etc.)
 
         Returns:
             web_custom_request function call with complete LoadRunner standard parameters
@@ -504,21 +559,39 @@ class LRGenerator:
 
         lines = []
         lines.append(indent + f'{LR_FUNCTIONS["WEB_CUSTOM_REQUEST"]}("{escaped_name}", ')
-        lines.append(indent + f'    "URL={escaped_url}", ')
-        lines.append(indent + f'    "Method={method}", ')
-        lines.append(indent + f'    "Resource=0", ')
-        lines.append(indent + f'    "RecContentType=text/html", ')
-        lines.append(indent + f'    "Referer=", ')
-        lines.append(indent + f'    "Snapshot={snapshot_id}", ')
-        lines.append(indent + f'    "Mode=HTML", ')
 
-        # Add body if present
+        if self.include_comments:
+            lines.append(indent + f'    "URL={escaped_url}",                // 요청 URL')
+            lines.append(indent + f'    "Method={method}",                  // HTTP 메서드')
+            lines.append(indent + f'    "Resource=0",                       // 리소스 타입')
+            lines.append(indent + f'    "RecContentType=text/html",         // 응답 Content-Type')
+            lines.append(indent + f'    "Referer=",                         // HTTP Referer')
+            lines.append(indent + f'    "Snapshot={snapshot_id}",           // VuGen 스냅샷')
+            lines.append(indent + f'    "Mode=HTML",                        // 파싱 모드')
+        else:
+            lines.append(indent + f'    "URL={escaped_url}", ')
+            lines.append(indent + f'    "Method={method}", ')
+            lines.append(indent + f'    "Resource=0", ')
+            lines.append(indent + f'    "RecContentType=text/html", ')
+            lines.append(indent + f'    "Referer=", ')
+            lines.append(indent + f'    "Snapshot={snapshot_id}", ')
+            lines.append(indent + f'    "Mode=HTML", ')
+
+        # Add body if present (JSON, XML, raw text)
         post_body = sampler.get('body', sampler.get('post_body', ''))
         if post_body:
             escaped_body = self.formatter.escape_c_string(post_body)
-            lines.append(indent + f'    "Body={escaped_body}", ')
+            if self.include_comments:
+                # Show preview of body content
+                body_preview = post_body[:50] + ('...' if len(post_body) > 50 else '')
+                lines.append(indent + f'    "Body={escaped_body}",              // Request Body: {body_preview}')
+            else:
+                lines.append(indent + f'    "Body={escaped_body}", ')
 
-        lines.append(indent + f'    LAST );')
+        if self.include_comments:
+            lines.append(indent + f'    LAST );                             // 파라미터 목록 끝')
+        else:
+            lines.append(indent + f'    LAST );')
 
         return "\n".join(lines)
 
@@ -984,3 +1057,92 @@ class LRGenerator:
         # LoadRunner uses tabs for indentation
         indent = '\t' * level
         return indent + text
+
+    def _generate_globals_h(self, parsed_data: Dict[str, Any]) -> str:
+        """
+        Generate globals.h file with global declarations
+
+        Args:
+            parsed_data: Parsed test plan data
+
+        Returns:
+            globals.h file content
+        """
+        content = """#ifndef _GLOBALS_H
+#define _GLOBALS_H
+
+//--------------------------------------------------------------------
+// Include Files
+#include "lrun.h"
+#include "web_api.h"
+#include "lrw_custom_body.h"
+
+//--------------------------------------------------------------------
+// Global Variables
+
+#endif // _GLOBALS_H
+"""
+        return content
+
+    def _generate_vuser_init_file(self, parsed_data: Dict[str, Any]) -> str:
+        """
+        Generate vuser_init.c file
+
+        Args:
+            parsed_data: Parsed test plan data
+
+        Returns:
+            vuser_init.c file content
+        """
+        lines = []
+
+        # Add include
+        lines.append('#include "globals.h"')
+        lines.append("")
+
+        # Generate vuser_init function
+        lines.append(self._generate_vuser_init(parsed_data))
+
+        return "\n".join(lines)
+
+    def _generate_action_file(self, parsed_data: Dict[str, Any]) -> str:
+        """
+        Generate Action.c file
+
+        Args:
+            parsed_data: Parsed test plan data
+
+        Returns:
+            Action.c file content
+        """
+        lines = []
+
+        # Add include
+        lines.append('#include "globals.h"')
+        lines.append("")
+
+        # Generate Action function
+        lines.append(self._generate_action(parsed_data))
+
+        return "\n".join(lines)
+
+    def _generate_vuser_end_file(self, parsed_data: Dict[str, Any]) -> str:
+        """
+        Generate vuser_end.c file
+
+        Args:
+            parsed_data: Parsed test plan data
+
+        Returns:
+            vuser_end.c file content
+        """
+        lines = []
+
+        # Add include
+        lines.append('#include "globals.h"')
+        lines.append("")
+
+        # Generate vuser_end function
+        lines.append(self._generate_vuser_end(parsed_data))
+
+        return "\n".join(lines)

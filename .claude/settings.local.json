@@ -1,18 +1,20 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir)",
-      "Bash(git init:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: 브라우저 창 닫으면 애플리케이션 자동 종료\n\n변경사항:\n- Chrome 프로세스 모니터링 스레드 추가\n- 브라우저 창을 닫으면 Streamlit 서버도 자동 종료\n- nonlocal 변수로 Chrome 프로세스 추적\n\n동작:\n1. Chrome을 --new-window로 실행하고 프로세스 추적\n2. 별도 스레드에서 Chrome 프로세스 종료 감지\n3. Chrome 종료 시 os._exit(0)로 전체 애플리케이션 종료\n\n사용자 경험 개선:\n- 브라우저만 닫으면 백그라운드 서버도 자동 정리\n- 수동으로 프로세스 종료할 필요 없음\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(python launcher.py:*)",
+      "Read(//d/**)",
+      "Bash(cd:*)",
+      "Bash(.venvScriptspython.exe -m flake8:*)",
+      "Bash(python -m flake8:*)",
+      "Bash(python:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(.venv\\Scripts\\python.exe -m pip install:*)",
-      "Bash(\".venv/Scripts/python.exe\" -m pip list)",
-      "Bash(\".venv/Scripts/streamlit.exe\" --version)",
-      "Bash(\".venv/Scripts/python.exe\":*)",
       "Bash(git push:*)",
-      "Bash(.venv\\Scripts\\python.exe -m flake8:*)",
-      "Bash(.venv\\Scripts\\python.exe -m mypy:*)",
-      "Bash(\".venv/Scripts/python.exe\" -m pytest:*)"
+      "Bash(pip install:*)",
+      "Bash(.venv/Scripts/python.exe -m pip install:*)",
+      "Bash(.venv/Scripts/streamlit.exe run:*)",
+      "Bash(.venv/Scripts/python.exe:*)"
     ],
     "deny": [],
     "ask": []

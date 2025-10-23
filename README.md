@@ -9,6 +9,7 @@
 - **직관적인 웹 UI**: Streamlit 기반의 사용하기 쉬운 인터페이스
 - **코드 프리뷰**: 변환 전후 코드를 나란히 비교
 - **변환 로그**: 상세한 변환 과정 및 경고 메시지 제공
+- **🤖 AI 요약**: Gemini API를 활용한 변환 결과 자동 분석 및 요약
 
 ## 개발 환경 설정
 
@@ -35,6 +36,20 @@ source .venv/bin/activate
 ```bash
 pip install -r requirements.txt
 ```
+
+### 4. Gemini API 설정 (선택사항)
+
+AI 요약 기능을 사용하려면 Google Gemini API 키가 필요합니다.
+
+1. [Google AI Studio](https://makersuite.google.com/app/apikey)에서 API 키 발급
+2. `.env.example` 파일을 `.env`로 복사
+3. `.env` 파일에 API 키 입력:
+
+```bash
+GEMINI_API_KEY=your_api_key_here
+```
+
+**참고**: API 키 없이도 기본 변환 기능은 모두 사용 가능합니다. AI 요약만 비활성화됩니다.
 
 ## 실행 방법
 

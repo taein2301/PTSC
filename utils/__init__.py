@@ -86,6 +86,15 @@ from .helpers import (
     ensure_directory_exists
 )
 
+# Import comparator functions
+from .comparator import (
+    ScriptComparator,
+    DiffLine,
+    ChangeType,
+    ComparisonStats,
+    compare_scripts
+)
+
 __all__ = [
     # Constants
     'APP_NAME',
@@ -157,5 +166,11 @@ __all__ = [
     'join_url',
     'parse_key_value_pairs',
     'get_file_extension',
-    'ensure_directory_exists'
+    'ensure_directory_exists',
+    # Comparator
+    'ScriptComparator',
+    'DiffLine',
+    'ChangeType',
+    'ComparisonStats',
+    'compare_scripts'
 ]

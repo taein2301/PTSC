@@ -112,22 +112,22 @@ class JMeterToLRConverter(BaseConverter):
                 'warnings': self.warnings
             }
 
-    def generate_output(self, converted_data: Dict[str, Any]) -> str:
+    def generate_output(self, converted_data: Dict[str, Any]) -> Dict[str, str]:
         """
-        Generate LoadRunner C script from converted data
+        Generate LoadRunner C script files from converted data
 
         Args:
             converted_data: Parsed and converted data structure
 
         Returns:
-            LoadRunner C script as string
+            Dictionary with 4 LoadRunner files: globals.h, vuser_init.c, Action.c, vuser_end.c
 
         Raises:
             Exception: If generation fails
         """
         try:
-            lr_script = self.generator.generate(converted_data)
-            return lr_script
+            lr_files = self.generator.generate(converted_data)
+            return lr_files
 
         except Exception as e:
             error_msg = f"{ERROR_CODES['CONVERSION_ERROR']}: Failed to generate output - {str(e)}"

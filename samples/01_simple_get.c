@@ -7,15 +7,15 @@
 
 Action()
 {
-    // Simple GET request
-    web_url("example_homepage",
-        "URL=http://example.com/",
-        "Resource=0",
-        "RecContentType=text/html",
-        "Referer=",
-        "Snapshot=t1.inf",
-        "Mode=HTML",
-        LAST);
+	// Simple GET request
+	web_url("example_homepage",
+		"URL=http://example.com/",
+		"Resource=0",
+		"RecContentType=text/html",
+		"Referer=",
+		"Snapshot=t1.inf",
+		"Mode=HTML",
+		LAST);
 
-    return 0;
+	return 0;
 }
