@@ -57,17 +57,18 @@ class LRGenerator:
 
     def _generate_header(self, parsed_data: Dict[str, Any]) -> str:
         """
-        Generate header with includes and comments
+        Generate header with includes and optional comments
 
         Args:
             parsed_data: Parsed test plan data
 
         Returns:
-            Header section as string with Korean comments
+            Header section as string with optional Korean comments
         """
         test_plan_name = parsed_data.get('test_plan', {}).get('name', 'Unknown Test Plan')
 
-        header = f"""/*
+        if self.include_comments:
+            header = f"""/*
  * ============================================================================
  * LoadRunner C 스크립트
  * ============================================================================
@@ -88,6 +89,11 @@ class LRGenerator:
 #include "lrun.h"
 #include "web_custom_body.h"
 """
+        else:
+            header = """#include "web_api.h"
+#include "lrun.h"
+#include "web_custom_body.h"
+"""
         return header
 
     def _generate_vuser_init(self, parsed_data: Dict[str, Any]) -> str:
@@ -98,30 +104,34 @@ class LRGenerator:
             parsed_data: Parsed test plan data
 
         Returns:
-            vuser_init function as string with Korean comments
+            vuser_init function as string with optional Korean comments
         """
         lines = []
-        lines.append("/*")
-        lines.append(" * ============================================================================")
-        lines.append(" * vuser_init - 가상 사용자 초기화")
-        lines.append(" * ============================================================================")
-        lines.append(" * 설명:")
-        lines.append(" *   각 가상 사용자(Vuser)가 스크립트 실행을 시작하기 전에 한 번 실행됩니다.")
-        lines.append(" *   로그인 정보, 전역 변수 등을 초기화하는 용도로 사용됩니다.")
-        lines.append(" *")
-        lines.append(" * 실행 시점:")
-        lines.append(" *   - Action 함수 실행 전")
-        lines.append(" *   - 각 Vuser당 1회만 실행")
-        lines.append(" * ============================================================================")
-        lines.append(" */")
+
+        if self.include_comments:
+            lines.append("/*")
+            lines.append(" * ============================================================================")
+            lines.append(" * vuser_init - 가상 사용자 초기화")
+            lines.append(" * ============================================================================")
+            lines.append(" * 설명:")
+            lines.append(" *   각 가상 사용자(Vuser)가 스크립트 실행을 시작하기 전에 한 번 실행됩니다.")
+            lines.append(" *   로그인 정보, 전역 변수 등을 초기화하는 용도로 사용됩니다.")
+            lines.append(" *")
+            lines.append(" * 실행 시점:")
+            lines.append(" *   - Action 함수 실행 전")
+            lines.append(" *   - 각 Vuser당 1회만 실행")
+            lines.append(" * ============================================================================")
+            lines.append(" */")
+
         lines.append(f"{LR_FUNCTIONS['VUSER_INIT']}()")
         lines.append("{")
 
         # Add common initialization
-        lines.append(self._indent("// ========================================"))
-        lines.append(self._indent("// 초기 설정"))
-        lines.append(self._indent("// ========================================"))
-        lines.append(self._indent('// 초기 대기 시간 (1초)'))
+        if self.include_comments:
+            lines.append(self._indent("// ========================================"))
+            lines.append(self._indent("// 초기 설정"))
+            lines.append(self._indent("// ========================================"))
+            lines.append(self._indent('// 초기 대기 시간 (1초)'))
         lines.append(self._indent('lr_think_time(1);'))
         lines.append("")
         lines.append(self._indent("return 0;"))
@@ -137,24 +147,27 @@ class LRGenerator:
             parsed_data: Parsed test plan data
 
         Returns:
-            Action function as string with Korean comments
+            Action function as string with optional Korean comments
         """
         lines = []
         lines.append("")
-        lines.append("/*")
-        lines.append(" * ============================================================================")
-        lines.append(" * Action - 메인 비즈니스 로직")
-        lines.append(" * ============================================================================")
-        lines.append(" * 설명:")
-        lines.append(" *   실제 부하 테스트 시나리오가 실행되는 메인 함수입니다.")
-        lines.append(" *   HTTP 요청, 트랜잭션, 검증 등 주요 비즈니스 로직이 포함됩니다.")
-        lines.append(" *")
-        lines.append(" * 실행 시점:")
-        lines.append(" *   - vuser_init 실행 후")
-        lines.append(" *   - Runtime Settings에 설정된 횟수만큼 반복 실행")
-        lines.append(" *   - vuser_end 실행 전")
-        lines.append(" * ============================================================================")
-        lines.append(" */")
+
+        if self.include_comments:
+            lines.append("/*")
+            lines.append(" * ============================================================================")
+            lines.append(" * Action - 메인 비즈니스 로직")
+            lines.append(" * ============================================================================")
+            lines.append(" * 설명:")
+            lines.append(" *   실제 부하 테스트 시나리오가 실행되는 메인 함수입니다.")
+            lines.append(" *   HTTP 요청, 트랜잭션, 검증 등 주요 비즈니스 로직이 포함됩니다.")
+            lines.append(" *")
+            lines.append(" * 실행 시점:")
+            lines.append(" *   - vuser_init 실행 후")
+            lines.append(" *   - Runtime Settings에 설정된 횟수만큼 반복 실행")
+            lines.append(" *   - vuser_end 실행 전")
+            lines.append(" * ============================================================================")
+            lines.append(" */")
+
         lines.append(f"{LR_FUNCTIONS['ACTION']}()")
         lines.append("{")
 
@@ -162,7 +175,8 @@ class LRGenerator:
         thread_groups = parsed_data.get('thread_groups', [])
 
         if not thread_groups:
-            lines.append(self._indent("// 변환할 샘플러가 없습니다"))
+            if self.include_comments:
+                lines.append(self._indent("// 변환할 샘플러가 없습니다"))
             lines.append(self._indent("return 0;"))
             lines.append("}")
             return "\n".join(lines)
@@ -170,7 +184,7 @@ class LRGenerator:
         # For simplicity, combine all thread groups into Action
         # In a real scenario, you might want separate actions
         for tg_idx, thread_group in enumerate(thread_groups):
-            if tg_idx > 0:
+            if tg_idx > 0 and self.include_comments:
                 lines.append("")
                 lines.append(self._indent(f"// Thread Group: {thread_group['name']}"))
                 lines.append("")
@@ -178,7 +192,8 @@ class LRGenerator:
             # Process headers (add them before requests)
             headers = thread_group.get('headers', [])
             if headers:
-                lines.append(self._indent("// Add headers"))
+                if self.include_comments:
+                    lines.append(self._indent("// Add headers"))
                 for header_manager in headers:
                     # HeaderManager contains a nested 'headers' array
                     if isinstance(header_manager, dict) and 'headers' in header_manager:
@@ -236,7 +251,8 @@ class LRGenerator:
                     loop_count = controller.get('loops', 1)
 
                     # Start loop
-                    lines.append(self._indent(f'// ======================================== 루프 시작: {ctrl_name} (반복 {loop_count}회) ========================================', level=1))
+                    if self.include_comments:
+                        lines.append(self._indent(f'// ======================================== 루프 시작: {ctrl_name} (반복 {loop_count}회) ========================================', level=1))
                     lines.append(self._generate_for_loop_start(loop_count))
                     lines.append("")
 
@@ -267,7 +283,8 @@ class LRGenerator:
 
                     # End loop
                     lines.append(self._generate_for_loop_end())
-                    lines.append(self._indent(f'// ======================================== 루프 종료: {ctrl_name} ========================================', level=1))
+                    if self.include_comments:
+                        lines.append(self._indent(f'// ======================================== 루프 종료: {ctrl_name} ========================================', level=1))
                     lines.append("")
 
             # Process any top-level samplers (not in controllers)
@@ -289,29 +306,34 @@ class LRGenerator:
             parsed_data: Parsed test plan data
 
         Returns:
-            vuser_end function as string with Korean comments
+            vuser_end function as string with optional Korean comments
         """
         lines = []
         lines.append("")
-        lines.append("/*")
-        lines.append(" * ============================================================================")
-        lines.append(" * vuser_end - 가상 사용자 종료")
-        lines.append(" * ============================================================================")
-        lines.append(" * 설명:")
-        lines.append(" *   각 가상 사용자(Vuser)가 스크립트 실행을 종료한 후 한 번 실행됩니다.")
-        lines.append(" *   연결 해제, 리소스 정리 등을 수행하는 용도로 사용됩니다.")
-        lines.append(" *")
-        lines.append(" * 실행 시점:")
-        lines.append(" *   - Action 함수 실행 후")
-        lines.append(" *   - 각 Vuser당 1회만 실행")
-        lines.append(" * ============================================================================")
-        lines.append(" */")
+
+        if self.include_comments:
+            lines.append("/*")
+            lines.append(" * ============================================================================")
+            lines.append(" * vuser_end - 가상 사용자 종료")
+            lines.append(" * ============================================================================")
+            lines.append(" * 설명:")
+            lines.append(" *   각 가상 사용자(Vuser)가 스크립트 실행을 종료한 후 한 번 실행됩니다.")
+            lines.append(" *   연결 해제, 리소스 정리 등을 수행하는 용도로 사용됩니다.")
+            lines.append(" *")
+            lines.append(" * 실행 시점:")
+            lines.append(" *   - Action 함수 실행 후")
+            lines.append(" *   - 각 Vuser당 1회만 실행")
+            lines.append(" * ============================================================================")
+            lines.append(" */")
+
         lines.append(f"{LR_FUNCTIONS['VUSER_END']}()")
         lines.append("{")
-        lines.append(self._indent("// ========================================"))
-        lines.append(self._indent("// 종료 처리"))
-        lines.append(self._indent("// ========================================"))
-        lines.append(self._indent("// 필요시 로그아웃, 연결 해제 등의 정리 작업을 수행합니다"))
+
+        if self.include_comments:
+            lines.append(self._indent("// ========================================"))
+            lines.append(self._indent("// 종료 처리"))
+            lines.append(self._indent("// ========================================"))
+            lines.append(self._indent("// 필요시 로그아웃, 연결 해제 등의 정리 작업을 수행합니다"))
         lines.append("")
         lines.append(self._indent("return 0;"))
         lines.append("}")
@@ -371,13 +393,23 @@ class LRGenerator:
 
         lines = []
         lines.append(indent + f'{LR_FUNCTIONS["WEB_URL"]}("{escaped_name}", ')
-        lines.append(indent + f'    "URL={escaped_url}", ')
-        lines.append(indent + f'    "Resource=0", ')
-        lines.append(indent + f'    "RecContentType=text/html", ')
-        lines.append(indent + f'    "Referer=", ')
-        lines.append(indent + f'    "Snapshot={snapshot_id}", ')
-        lines.append(indent + f'    "Mode=HTML", ')
-        lines.append(indent + f'    LAST );')
+
+        if self.include_comments:
+            lines.append(indent + f'    "URL={escaped_url}",  // 요청할 URL 주소')
+            lines.append(indent + f'    "Resource=0",  // 0: 페이지 요청, 1: 리소스(이미지/CSS/JS) 요청')
+            lines.append(indent + f'    "RecContentType=text/html",  // 응답 Content-Type (응답 검증용)')
+            lines.append(indent + f'    "Referer=",  // HTTP Referer 헤더 (이전 페이지 URL)')
+            lines.append(indent + f'    "Snapshot={snapshot_id}",  // VuGen 스냅샷 파일명 (디버깅용)')
+            lines.append(indent + f'    "Mode=HTML",  // 파싱 모드: HTML, HTTP, ALL')
+            lines.append(indent + f'    LAST );  // 파라미터 목록의 끝을 나타냄 (필수)')
+        else:
+            lines.append(indent + f'    "URL={escaped_url}", ')
+            lines.append(indent + f'    "Resource=0", ')
+            lines.append(indent + f'    "RecContentType=text/html", ')
+            lines.append(indent + f'    "Referer=", ')
+            lines.append(indent + f'    "Snapshot={snapshot_id}", ')
+            lines.append(indent + f'    "Mode=HTML", ')
+            lines.append(indent + f'    LAST );')
 
         return "\n".join(lines)
 
@@ -402,22 +434,34 @@ class LRGenerator:
 
         lines = []
         lines.append(indent + f'{LR_FUNCTIONS["WEB_SUBMIT_DATA"]}("{escaped_name}", ')
-        lines.append(indent + f'    "Action={escaped_url}", ')
 
         # Add POST parameters (check both 'parameters' and 'arguments' for backward compatibility)
         parameters = sampler.get('parameters', sampler.get('arguments', []))
         post_body = sampler.get('body', sampler.get('post_body', ''))
 
-        # Add standard parameters
-        lines.append(indent + f'    "Method=POST", ')
-        lines.append(indent + f'    "RecContentType=text/html", ')
-        lines.append(indent + f'    "Referer=", ')
-        lines.append(indent + f'    "Snapshot={snapshot_id}", ')
-        lines.append(indent + f'    "Mode=HTML", ')
+        # Add standard parameters with comments
+        if self.include_comments:
+            lines.append(indent + f'    "Action={escaped_url}",  // Form Action URL (POST 요청 대상)')
+            lines.append(indent + f'    "Method=POST",  // HTTP 메서드 (POST/GET)')
+            lines.append(indent + f'    "RecContentType=text/html",  // 응답 Content-Type')
+            lines.append(indent + f'    "Referer=",  // HTTP Referer 헤더')
+            lines.append(indent + f'    "Snapshot={snapshot_id}",  // VuGen 스냅샷 파일명')
+            lines.append(indent + f'    "Mode=HTML",  // 파싱 모드: HTML, HTTP, ALL')
+        else:
+            lines.append(indent + f'    "Action={escaped_url}", ')
+            lines.append(indent + f'    "Method=POST", ')
+            lines.append(indent + f'    "RecContentType=text/html", ')
+            lines.append(indent + f'    "Referer=", ')
+            lines.append(indent + f'    "Snapshot={snapshot_id}", ')
+            lines.append(indent + f'    "Mode=HTML", ')
 
         # Add parameters as ITEMDATA if present
         if parameters:
-            lines.append(indent + f'    ITEMDATA, ')
+            if self.include_comments:
+                lines.append(indent + f'    ITEMDATA,  // POST 파라미터 목록 시작')
+            else:
+                lines.append(indent + f'    ITEMDATA, ')
+
             for param in parameters:
                 param_name = self.formatter.escape_c_string(param['name'])
                 param_value = self.formatter.escape_c_string(param['value'])
@@ -426,9 +470,15 @@ class LRGenerator:
                 if '${' in param_value:
                     param_value = self.string_helper.convert_jmeter_to_lr_variable(param_value)
 
-                lines.append(indent + f'    "Name={param_name}", "Value={param_value}", ENDITEM, ')
+                if self.include_comments:
+                    lines.append(indent + f'    "Name={param_name}", "Value={param_value}", ENDITEM,  // Form 파라미터: {param_name}')
+                else:
+                    lines.append(indent + f'    "Name={param_name}", "Value={param_value}", ENDITEM, ')
 
-        lines.append(indent + f'    LAST );')
+        if self.include_comments:
+            lines.append(indent + f'    LAST );  // 파라미터 목록 끝 (필수)')
+        else:
+            lines.append(indent + f'    LAST );')
 
         return "\n".join(lines)
 
@@ -573,20 +623,28 @@ class LRGenerator:
         lines = []
         # Add comments if enabled
         if self.include_comments:
-            lines.append(indent + "// ----------------------------------------")
+            lines.append(indent + "// ========================================")
             lines.append(indent + f"// 상관관계(Correlation): {refname}")
             lines.append(indent + f"// 좌측 경계(LB): {lb[:40]}{'...' if len(lb) > 40 else ''}")
             lines.append(indent + f"// 우측 경계(RB): {rb[:40]}{'...' if len(rb) > 40 else ''}")
             lines.append(indent + f"// 추출 순서: {ordinal_kr} 값")
             lines.append(indent + "// 주의: 이 함수는 HTTP 요청 전에 위치해야 합니다")
-            lines.append(indent + "// ----------------------------------------")
-        lines.append(indent + f'{LR_FUNCTIONS["WEB_REG_SAVE_PARAM"]}("{refname}", ')
-        lines.append(indent + f'    "LB={lb_escaped}", ')
-        lines.append(indent + f'    "RB={rb_escaped}", ')
-        lines.append(indent + f'    "Ord={ordinal}", ')
-        lines.append(indent + f'    "Search=Body", ')
-        lines.append(indent + f'    "RelFrameID=All", ')
-        lines.append(indent + f'    LAST );')
+            lines.append(indent + "// ========================================")
+            lines.append(indent + f'{LR_FUNCTIONS["WEB_REG_SAVE_PARAM"]}("{refname}",  // 저장할 파라미터 이름 (추후 lr_eval_string으로 사용)')
+            lines.append(indent + f'    "LB={lb_escaped}",  // Left Boundary: 추출할 값의 왼쪽 경계 문자열')
+            lines.append(indent + f'    "RB={rb_escaped}",  // Right Boundary: 추출할 값의 오른쪽 경계 문자열')
+            lines.append(indent + f'    "Ord={ordinal}",  // Ordinal: 추출 순서 (1=첫번째, Last=마지막, All=전체)')
+            lines.append(indent + f'    "Search=Body",  // 검색 대상: Body(응답본문), Headers(응답헤더), All(전체)')
+            lines.append(indent + f'    "RelFrameID=All",  // 프레임 ID: All(모든 프레임), 또는 특정 프레임 번호')
+            lines.append(indent + f'    LAST );  // 파라미터 목록 끝 (필수)')
+        else:
+            lines.append(indent + f'{LR_FUNCTIONS["WEB_REG_SAVE_PARAM"]}("{refname}", ')
+            lines.append(indent + f'    "LB={lb_escaped}", ')
+            lines.append(indent + f'    "RB={rb_escaped}", ')
+            lines.append(indent + f'    "Ord={ordinal}", ')
+            lines.append(indent + f'    "Search=Body", ')
+            lines.append(indent + f'    "RelFrameID=All", ')
+            lines.append(indent + f'    LAST );')
 
         return "\n".join(lines)
 
@@ -645,33 +703,41 @@ class LRGenerator:
 
     def _generate_transaction_start(self, name: str) -> str:
         """
-        Generate lr_start_transaction call with Korean comments
+        Generate lr_start_transaction call with optional Korean comments
 
         Args:
             name: Transaction name
 
         Returns:
-            lr_start_transaction function call with Korean comments
+            lr_start_transaction function call with optional Korean comments
         """
         escaped_name = self.formatter.escape_c_string(name)
-        comment = self._indent(f'// ======================================== 트랜잭션 시작: {name} ========================================', level=1)
-        trans_start = self._indent(f'{LR_FUNCTIONS["LR_START_TRANSACTION"]}("{escaped_name}");', level=1)
-        return f"{comment}\n{trans_start}"
+        if self.include_comments:
+            comment = self._indent(f'// ======================================== 트랜잭션 시작: {name} ========================================', level=1)
+            trans_start = self._indent(f'{LR_FUNCTIONS["LR_START_TRANSACTION"]}("{escaped_name}");  // 응답시간 측정 시작', level=1)
+            return f"{comment}\n{trans_start}"
+        else:
+            trans_start = self._indent(f'{LR_FUNCTIONS["LR_START_TRANSACTION"]}("{escaped_name}");', level=1)
+            return trans_start
 
     def _generate_transaction_end(self, name: str) -> str:
         """
-        Generate lr_end_transaction call with Korean comments
+        Generate lr_end_transaction call with optional Korean comments
 
         Args:
             name: Transaction name
 
         Returns:
-            lr_end_transaction function call with Korean comments
+            lr_end_transaction function call with optional Korean comments
         """
         escaped_name = self.formatter.escape_c_string(name)
-        comment = self._indent(f'// ======================================== 트랜잭션 종료: {name} ========================================', level=1)
-        trans_end = self._indent(f'{LR_FUNCTIONS["LR_END_TRANSACTION"]}("{escaped_name}", LR_AUTO);', level=1)
-        return f"{comment}\n{trans_end}"
+        if self.include_comments:
+            comment = self._indent(f'// ======================================== 트랜잭션 종료: {name} ========================================', level=1)
+            trans_end = self._indent(f'{LR_FUNCTIONS["LR_END_TRANSACTION"]}("{escaped_name}", LR_AUTO);  // LR_AUTO: 성공/실패 자동 판단', level=1)
+            return f"{comment}\n{trans_end}"
+        else:
+            trans_end = self._indent(f'{LR_FUNCTIONS["LR_END_TRANSACTION"]}("{escaped_name}", LR_AUTO);', level=1)
+            return trans_end
 
     def _build_url(self, sampler: Dict[str, Any]) -> str:
         """
