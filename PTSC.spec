@@ -12,6 +12,7 @@ datas = [
     ('generators', 'generators'),
     ('utils', 'utils'),
     ('samples', 'samples'),
+    ('docs', 'docs'),
 ]
 
 # Add .streamlit folder if it exists
@@ -19,11 +20,15 @@ if Path('.streamlit').exists():
     datas.append(('.streamlit', '.streamlit'))
 
 # Collect package metadata for streamlit and other packages
-from PyInstaller.utils.hooks import copy_metadata, collect_data_files
+from PyInstaller.utils.hooks import copy_metadata, collect_data_files, collect_all
 datas += copy_metadata('streamlit')
 datas += copy_metadata('altair')
 datas += copy_metadata('click')
 datas += copy_metadata('toml')
+
+# Collect python-dotenv
+tmp_datas, tmp_binaries, tmp_hiddenimports = collect_all('dotenv')
+datas += tmp_datas
 
 # Collect streamlit static files (required for web UI)
 datas += collect_data_files('streamlit', include_py_files=False)
@@ -55,6 +60,9 @@ a = Analysis(
         'click',
         'toml',
         'pyarrow',
+        'dotenv',
+        'google.generativeai',
+        'google.ai.generativelanguage',
     ],
     hookspath=[],
     hooksconfig={},

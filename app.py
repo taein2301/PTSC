@@ -822,7 +822,7 @@ def main():
             "Upload JMX File",
             type=['jmx'],
             key=f"jmx_uploader_{st.session_state.jmx_uploader_key}",
-            help="Upload a valid JMeter JMX file (max 10MB)",
+            help="Upload a valid JMeter JMX file (max 30MB)",
             label_visibility="collapsed"
         )
 
@@ -1221,7 +1221,7 @@ Runtime Settings > Run Logic > Run:
             "Upload C File",
             type=['c'],
             key=f"lr_uploader_{st.session_state.lr_uploader_key}",
-            help="Upload a valid LoadRunner C script file (max 10MB)",
+            help="Upload a valid LoadRunner C script file (max 30MB)",
             label_visibility="collapsed"
         )
 

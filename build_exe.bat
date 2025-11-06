@@ -78,7 +78,8 @@ echo   2. Wait for the browser to open automatically
 echo   3. If browser doesn't open, navigate to: http://localhost:8501
 echo.
 echo To stop the application:
-echo   - Close the console window
+echo   - Close the browser window ^(application will auto-exit^)
+echo   - Or close the console window
 echo.
 echo Note: The first launch may take a few seconds.
 ) > "dist\PTSC\README.txt"

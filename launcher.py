@@ -22,13 +22,18 @@ def main():
     # Get the directory where this script is located
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
-        # PyInstaller extracts files to sys._MEIPASS
+        # In onedir mode, sys._MEIPASS points to _internal folder
+        # In onefile mode, sys._MEIPASS points to temp extraction folder
         if hasattr(sys, '_MEIPASS'):
-            # Files are in the temporary _MEIPASS folder
             application_path = Path(sys._MEIPASS)
         else:
-            # Fallback to executable directory
-            application_path = Path(sys.executable).parent
+            # Fallback: check _internal folder relative to executable
+            exe_dir = Path(sys.executable).parent
+            internal_dir = exe_dir / "_internal"
+            if internal_dir.exists():
+                application_path = internal_dir
+            else:
+                application_path = exe_dir
     else:
         # Running as script
         application_path = Path(__file__).parent
@@ -39,10 +44,15 @@ def main():
     print("=" * 80)
     print("Performance Test Script Converter (PTSC)")
     print("=" * 80)
+    print(f"Frozen: {getattr(sys, 'frozen', False)}")
+    print(f"Has _MEIPASS: {hasattr(sys, '_MEIPASS')}")
+    if hasattr(sys, '_MEIPASS'):
+        print(f"_MEIPASS: {sys._MEIPASS}")
+    print(f"sys.executable: {sys.executable}")
+    print(f"Executable parent: {Path(sys.executable).parent}")
     print(f"Application path: {application_path}")
     print(f"Looking for app.py at: {app_file}")
     print(f"File exists: {app_file.exists()}")
-    print(f"Frozen: {getattr(sys, 'frozen', False)}")
 
     if not app_file.exists():
         print(f"\nError: app.py not found!")

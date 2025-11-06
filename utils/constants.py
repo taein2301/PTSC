@@ -15,7 +15,7 @@ APP_VERSION = "1.0.0"
 APP_DESCRIPTION = "Bidirectional converter between JMeter JMX and LoadRunner C scripts"
 
 # File Settings
-MAX_FILE_SIZE_MB = 10
+MAX_FILE_SIZE_MB = 30
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 # Supported File Extensions
